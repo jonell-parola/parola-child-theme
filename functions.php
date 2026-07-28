@@ -268,7 +268,7 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.1.0', // Multi-instance engine — bumped to bust aggressive caches
+        '1.0.36', // Multi-instance + robust CSV parsing (no NaN bars)
         true
     );
 }
@@ -281,9 +281,11 @@ add_action( 'wp_enqueue_scripts', 'parola_enqueue_visualization_assets' );
  * Paste this entire block into your active child theme's functions.php.
  * No separate files, no build step, no plugin required.
  *
- * Supports MULTIPLE instances per page/post. Each block instance gets a
- * unique canvas ID, and the D3 engine (parola-charts.js) initializes each
- * canvas independently, so instances no longer collide.
+ * Supports MULTIPLE instances per page/post. Each block renders a canvas
+ * with a unique ID plus a shared ".d3-test-canvas" class. The D3 engine,
+ * the front-end CSV loader, and the guest control-hider below are all
+ * scoped per-canvas, so instances no longer collide. The CSV upload /
+ * Media Library selection behaviour is unchanged.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -362,7 +364,7 @@ function custom_d3_render_block( $attributes ) {
 
 	// Unique, incrementing ID per block instance so multiple charts on the
 	// same page never share the same element ID. The shared "d3-test-canvas"
-	// class is what the front-end engine selects on.
+	// class is what the front-end scripts select on.
 	static $instance = 0;
 	$instance++;
 	$canvas_id = 'd3-test-canvas-' . $instance;
@@ -557,13 +559,106 @@ function custom_d3_get_editor_js() {
 }
 
 /* =========================================================================
- * 5. FRONT-END DATA LOADING
- *    Each block instance stores its selected CSV on the canvas element as
- *    data-csv-url / data-csv-filename. The chart engine (parola-charts.js)
- *    reads those attributes per canvas and loads the CSV directly, so no
- *    global-ID injection script is needed anymore. This is what makes
- *    multiple instances on one page work reliably.
+ * 5. FRONT-END SCRIPT
+ *    Waits for the third-party generator's #csv-file input to appear,
+ *    then fetches the CSV from the Media Library and injects it as if
+ *    the user had picked it manually.
  * ========================================================================= */
+
+add_action( 'wp_footer', 'custom_d3_print_frontend_script' );
+function custom_d3_print_frontend_script() {
+
+	// Only bother printing this if the block's markup is actually on
+	// the page. A cheap, safe way to check without extra globals.
+	if ( ! is_singular() ) {
+		return;
+	}
+
+	global $post;
+	if ( ! $post || false === strpos( $post->post_content, 'wp:custom-d3/chart-block' ) ) {
+		return;
+	}
+	?>
+	<script>
+	( function () {
+		// Handle every chart instance on the page independently.
+		var canvases = document.querySelectorAll( '.d3-test-canvas' );
+		if ( ! canvases.length ) {
+			return;
+		}
+
+		canvases.forEach( function ( canvas ) {
+
+			var csvUrl      = canvas.getAttribute( 'data-csv-url' );
+			var csvFilename = canvas.getAttribute( 'data-csv-filename' ) || 'chart.csv';
+
+			if ( ! csvUrl ) {
+				return; // Nothing selected for this block instance.
+			}
+
+			var alreadyAssigned = false;
+
+			function assignCsvToInput( fileInput ) {
+				if ( alreadyAssigned ) {
+					return;
+				}
+
+				fetch( csvUrl )
+					.then( function ( response ) {
+						if ( ! response.ok ) {
+							throw new Error( 'custom-d3: failed to fetch CSV, status ' + response.status );
+						}
+						return response.blob();
+					} )
+					.then( function ( blob ) {
+						var file = new File( [ blob ], csvFilename, { type: 'text/csv' } );
+						var transfer = new DataTransfer();
+						transfer.items.add( file );
+
+						fileInput.files = transfer.files;
+						fileInput.dispatchEvent( new Event( 'input', { bubbles: true } ) );
+						fileInput.dispatchEvent( new Event( 'change', { bubbles: true } ) );
+
+						alreadyAssigned = true;
+					} )
+					.catch( function ( error ) {
+						console.error( 'custom-d3: error assigning CSV to file input.', error );
+					} );
+			}
+
+			// The D3 script creates this canvas's file input after this script
+			// runs, so check immediately and also observe for it being added
+			// later. The lookup is scoped to THIS canvas (not a global ID), so
+			// each block wires up to its own file input.
+			var existingInput = canvas.querySelector( 'input[type="file"]' );
+			if ( existingInput ) {
+				assignCsvToInput( existingInput );
+				return;
+			}
+
+			var observer = new MutationObserver( function ( mutations, obs ) {
+				var fileInput = canvas.querySelector( 'input[type="file"]' );
+				if ( fileInput ) {
+					assignCsvToInput( fileInput );
+					obs.disconnect();
+				}
+			} );
+
+			observer.observe( canvas, {
+				childList: true,
+				subtree: true
+			} );
+
+			// Safety net: stop observing after 20 seconds even if the
+			// input never appears, so we don't watch forever.
+			setTimeout( function () {
+				observer.disconnect();
+			}, 20000 );
+		} );
+	} )();
+	</script>
+	<?php
+}
 
 /* =========================================================================
  * 6. HIDE SETTINGS/CONTROLS PANEL FOR LOGGED-OUT VISITORS
