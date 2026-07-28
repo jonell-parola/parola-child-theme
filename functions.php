@@ -268,7 +268,7 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.34', // Bumped version string to override any aggressive cache memory
+        '1.1.0', // Multi-instance engine — bumped to bust aggressive caches
         true
     );
 }
@@ -281,8 +281,9 @@ add_action( 'wp_enqueue_scripts', 'parola_enqueue_visualization_assets' );
  * Paste this entire block into your active child theme's functions.php.
  * No separate files, no build step, no plugin required.
  *
- * Supports ONE instance per page/post (the third-party D3 script uses
- * fixed element IDs, so multiple instances would collide).
+ * Supports MULTIPLE instances per page/post. Each block instance gets a
+ * unique canvas ID, and the D3 engine (parola-charts.js) initializes each
+ * canvas independently, so instances no longer collide.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -346,7 +347,7 @@ function custom_d3_register_block() {
 				),
 			),
 			'supports'        => array(
-				'multiple' => false,
+				'multiple' => true,
 			),
 			'render_callback' => 'custom_d3_render_block',
 		)
@@ -358,6 +359,13 @@ function custom_d3_register_block() {
  * ========================================================================= */
 
 function custom_d3_render_block( $attributes ) {
+
+	// Unique, incrementing ID per block instance so multiple charts on the
+	// same page never share the same element ID. The shared "d3-test-canvas"
+	// class is what the front-end engine selects on.
+	static $instance = 0;
+	$instance++;
+	$canvas_id = 'd3-test-canvas-' . $instance;
 
 	$csv_id       = isset( $attributes['csvId'] ) ? absint( $attributes['csvId'] ) : 0;
 	$csv_filename = isset( $attributes['csvFilename'] ) ? sanitize_file_name( $attributes['csvFilename'] ) : '';
@@ -376,15 +384,17 @@ function custom_d3_render_block( $attributes ) {
 
 	if ( empty( $csv_url ) ) {
 		return sprintf(
-			'<div %1$s><div id="d3-test-canvas"></div><p style="color:#b32d2e;font-style:italic;">%2$s</p></div>',
+			'<div %1$s><div id="%2$s" class="d3-test-canvas"></div><p style="color:#b32d2e;font-style:italic;">%3$s</p></div>',
 			$wrapper_attributes,
+			esc_attr( $canvas_id ),
 			esc_html__( 'No CSV file has been selected for this D3 chart yet. Edit this block and choose a CSV file.', 'custom-d3' )
 		);
 	}
 
 	return sprintf(
-		'<div %1$s><div id="d3-test-canvas" data-csv-url="%2$s" data-csv-filename="%3$s"></div></div>',
+		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s"></div></div>',
 		$wrapper_attributes,
+		esc_attr( $canvas_id ),
 		esc_url( $csv_url ),
 		esc_attr( $csv_filename )
 	);
@@ -428,11 +438,11 @@ function custom_d3_get_editor_js() {
 
 	registerBlockType( 'custom-d3/chart-block', {
 		title: __( 'D3 Chart', 'custom-d3' ),
-		description: __( 'Displays a D3.js chart generated from an uploaded CSV file. Only one per page is supported.', 'custom-d3' ),
+		description: __( 'Displays a D3.js chart generated from an uploaded CSV file. Multiple charts per page are supported.', 'custom-d3' ),
 		icon: 'chart-bar',
 		category: 'widgets',
 		supports: {
-			multiple: false
+			multiple: true
 		},
 		attributes: {
 			csvId: {
@@ -547,100 +557,13 @@ function custom_d3_get_editor_js() {
 }
 
 /* =========================================================================
- * 5. FRONT-END SCRIPT
- *    Waits for the third-party generator's #csv-file input to appear,
- *    then fetches the CSV from the Media Library and injects it as if
- *    the user had picked it manually.
+ * 5. FRONT-END DATA LOADING
+ *    Each block instance stores its selected CSV on the canvas element as
+ *    data-csv-url / data-csv-filename. The chart engine (parola-charts.js)
+ *    reads those attributes per canvas and loads the CSV directly, so no
+ *    global-ID injection script is needed anymore. This is what makes
+ *    multiple instances on one page work reliably.
  * ========================================================================= */
-
-add_action( 'wp_footer', 'custom_d3_print_frontend_script' );
-function custom_d3_print_frontend_script() {
-
-	// Only bother printing this if the block's markup is actually on
-	// the page. A cheap, safe way to check without extra globals.
-	if ( ! is_singular() ) {
-		return;
-	}
-
-	global $post;
-	if ( ! $post || false === strpos( $post->post_content, 'wp:custom-d3/chart-block' ) ) {
-		return;
-	}
-	?>
-	<script>
-	( function () {
-		var canvas = document.getElementById( 'd3-test-canvas' );
-		if ( ! canvas ) {
-			return;
-		}
-
-		var csvUrl      = canvas.getAttribute( 'data-csv-url' );
-		var csvFilename = canvas.getAttribute( 'data-csv-filename' ) || 'chart.csv';
-
-		if ( ! csvUrl ) {
-			return; // Nothing selected for this block instance.
-		}
-
-		var alreadyAssigned = false;
-
-		function assignCsvToInput( fileInput ) {
-			if ( alreadyAssigned ) {
-				return;
-			}
-
-			fetch( csvUrl )
-				.then( function ( response ) {
-					if ( ! response.ok ) {
-						throw new Error( 'custom-d3: failed to fetch CSV, status ' + response.status );
-					}
-					return response.blob();
-				} )
-				.then( function ( blob ) {
-					var file = new File( [ blob ], csvFilename, { type: 'text/csv' } );
-					var transfer = new DataTransfer();
-					transfer.items.add( file );
-
-					fileInput.files = transfer.files;
-					fileInput.dispatchEvent( new Event( 'input', { bubbles: true } ) );
-					fileInput.dispatchEvent( new Event( 'change', { bubbles: true } ) );
-
-					alreadyAssigned = true;
-				} )
-				.catch( function ( error ) {
-					console.error( 'custom-d3: error assigning CSV to third-party file input.', error );
-				} );
-		}
-
-		// The third-party script may create #csv-file after this script runs,
-		// so check immediately and also observe for it being added later.
-		var existingInput = document.getElementById( 'csv-file' );
-		if ( existingInput ) {
-			assignCsvToInput( existingInput );
-			return;
-		}
-
-		var observer = new MutationObserver( function ( mutations, obs ) {
-			var fileInput = document.getElementById( 'csv-file' );
-			if ( fileInput ) {
-				assignCsvToInput( fileInput );
-				obs.disconnect();
-			}
-		} );
-
-		observer.observe( canvas.parentElement || document.body, {
-			childList: true,
-			subtree: true
-		} );
-
-		// Safety net: stop observing after 20 seconds even if the
-		// third-party input never appears, so we don't watch forever.
-		setTimeout( function () {
-			observer.disconnect();
-		}, 20000 );
-	} )();
-	</script>
-	<?php
-}
 
 /* =========================================================================
  * 6. HIDE SETTINGS/CONTROLS PANEL FOR LOGGED-OUT VISITORS
@@ -670,49 +593,53 @@ function custom_d3_hide_controls_for_guests_js() {
 	<script>
 	(function () {
 		function initD3GuestControls() {
-			var canvas = document.getElementById('d3-test-canvas');
+			// Handle every chart instance on the page, not just the first.
+			var canvases = document.querySelectorAll('.d3-test-canvas');
 
-			if (!canvas) {
+			if (!canvases.length) {
 				return;
 			}
 
-			function hideControls() {
-				/*
-				 * Hides the first direct child inside #d3-test-canvas.
-				 * This assumes the first child is the controls panel.
-				 */
-				var controls = canvas.firstElementChild;
+			canvases.forEach(function (canvas) {
 
-				if (!controls) {
-					return false;
+				function hideControls() {
+					/*
+					 * Hides the first direct child inside this canvas.
+					 * This assumes the first child is the controls panel.
+					 */
+					var controls = canvas.firstElementChild;
+
+					if (!controls) {
+						return false;
+					}
+
+					controls.style.setProperty('display', 'none', 'important');
+
+					return true;
 				}
 
-				controls.style.setProperty('display', 'none', 'important');
-
-				return true;
-			}
-
-			// Try immediately in case the D3 controls already exist.
-			if (hideControls()) {
-				return;
-			}
-
-			// Watch for controls dynamically inserted by the D3 script.
-			var observer = new MutationObserver(function () {
+				// Try immediately in case the D3 controls already exist.
 				if (hideControls()) {
-					observer.disconnect();
+					return;
 				}
-			});
 
-			observer.observe(canvas, {
-				childList: true,
-				subtree: true
-			});
+				// Watch for controls dynamically inserted by the D3 script.
+				var observer = new MutationObserver(function () {
+					if (hideControls()) {
+						observer.disconnect();
+					}
+				});
 
-			// Stop watching after 20 seconds.
-			window.setTimeout(function () {
-				observer.disconnect();
-			}, 20000);
+				observer.observe(canvas, {
+					childList: true,
+					subtree: true
+				});
+
+				// Stop watching after 20 seconds.
+				window.setTimeout(function () {
+					observer.disconnect();
+				}, 20000);
+			});
 		}
 
 		if (document.readyState === 'loading') {
