@@ -21,25 +21,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const canvas = d3.select(canvasNode);
         const uid = `p${instanceIndex}`;
 
-        let customCol1Width = null;
-        let customCol2Width = null;
         let currentTitle = "";
         let currentSubtitle = "";
 
         // Read configuration from each individual chart container.
         const defaultCsv =
-    canvas.attr("data-csv-url") ||
-    canvas.attr("data-source-file") ||
-    "";
-        const defaultFont =
-            canvas.attr("typography-font-family") || "sans-serif";
+            canvas.attr("data-csv-url") ||
+            canvas.attr("data-source-file") ||
+            "";
         const defaultChartType = canvas.attr("chart-type") || "bar";
-        const defaultLogoStyle =
-            canvas.attr("logo-style") || "parola logo only.png";
-
-        const rawShowTable = canvas.attr("data-show-table-legend");
-        const defaultShowTable =
-            rawShowTable === null ? true : rawShowTable === "true";
+        const activeFont = "Inter";
+        const selectedLogo = "parola logo with text.png";
 
         canvas
             .style("position", "relative")
@@ -49,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
         canvas.selectAll("*").remove();
 
         // =========================================================
-        // CONTROLS
+        // CONTROLS (Only Data Source File and Chart Type)
         // =========================================================
 
         const controls = canvas
@@ -59,8 +51,8 @@ document.addEventListener('DOMContentLoaded', function () {
             .style("background-color", "#f9f9f9")
             .style("border", "1px solid #e5e5e5")
             .style("border-radius", "8px")
-            .style("font-family", "sans-serif")
-            .style("font-size", "13px")
+            .style("font-family", activeFont)
+            .style("font-size", "14px")
             .style("display", "grid")
             .style(
                 "grid-template-columns",
@@ -111,41 +103,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 accept: ".csv"
             }
         );
-
-        // Typography dropdown.
-        const fontWrapper = controls
-            .append("div")
-            .style("display", "flex")
-            .style("flex-direction", "column")
-            .style("gap", "5px");
-
-        fontWrapper
-            .append("label")
-            .text("3. Typography Font Family:")
-            .style("font-weight", "bold")
-            .style("color", "#444");
-
-        const fontPicker = fontWrapper
-            .append("select")
-            .attr("id", `font-picker-${uid}`)
-            .style("padding", "4px");
-
-        [
-            "sans-serif",
-            "serif",
-            "monospace",
-            "cursive",
-            "system-ui"
-        ].forEach(function (font) {
-            const option = fontPicker
-                .append("option")
-                .attr("value", font)
-                .text(font);
-
-            if (font === defaultFont) {
-                option.property("selected", true);
-            }
-        });
 
         // Chart type dropdown.
         const typeWrapper = controls
@@ -201,49 +158,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // Logo dropdown.
-        const logoWrapper = controls
-            .append("div")
-            .style("display", "flex")
-            .style("flex-direction", "column")
-            .style("gap", "5px");
-
-        logoWrapper
-            .append("label")
-            .text("Logo Style:")
-            .style("font-weight", "bold")
-            .style("color", "#444");
-
-        const logoPicker = logoWrapper
-            .append("select")
-            .attr("id", `logo-style-${uid}`)
-            .style("padding", "4px");
-
-        [
-            {
-                value: "parola logo only.png",
-                label: "Logo Only"
-            },
-            {
-                value: "parola logo all white.png",
-                label: "All White"
-            },
-            {
-                value: "parola logo with text.png",
-                label: "Logo with Text"
-            }
-        ].forEach(function (item) {
-            const option = logoPicker
-                .append("option")
-                .attr("value", item.value)
-                .text(item.label);
-
-            if (item.value === defaultLogoStyle) {
-                option.property("selected", true);
-            }
-        });
-
-        // Locate the JavaScript asset directory for the logo files.
+        // Locate the JavaScript asset directory for logo files.
         let themeJsUrl = "";
 
         const scripts = document.getElementsByTagName("script");
@@ -267,86 +182,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 "/wp-content/themes/parola-child-theme/js/";
         }
 
-        const TABLE_CHART_TYPES = new Set([
-            "pie",
-            "horizontal-bar",
-            "horizontal-stacked-bar"
-        ]);
-
-        const tableLegendSection = controls
-            .append("div")
-            .attr(
-                "id",
-                `table-legend-controls-section-${uid}`
-            )
-            .style("grid-column", "1 / -1")
-            .style("display", "none")
-            .style("padding", "15px")
-            .style("margin-top", "5px")
-            .style("border-top", "2px solid #ddd")
-            .style("background-color", "#f0f4f5")
-            .style("border-radius", "6px");
-
-        tableLegendSection
-            .append("div")
-            .text("Table Legend Settings")
-            .style("font-weight", "bold")
-            .style("font-size", "14px")
-            .style("color", "#333")
-            .style("margin-bottom", "10px");
-
-        const tableLegendGrid = tableLegendSection
-            .append("div")
-            .style("display", "grid")
-            .style(
-                "grid-template-columns",
-                "repeat(auto-fit, minmax(220px, 1fr))"
-            )
-            .style("gap", "15px");
-
-        const tableToggleWrapper = tableLegendGrid
-            .append("div")
-            .style("display", "flex")
-            .style("flex-direction", "column")
-            .style("gap", "5px");
-
-        tableToggleWrapper
-            .append("label")
-            .text("Show Table Legend:")
-            .style("font-weight", "bold")
-            .style("color", "#444");
-
-        const tableToggle = tableToggleWrapper
-            .append("input")
-            .attr("type", "checkbox")
-            .attr("id", `table-toggle-${uid}`)
-            .property("checked", defaultShowTable)
-            .style("width", "20px")
-            .style("height", "20px")
-            .style("cursor", "pointer");
-
-        function updateTableControlsVisibility() {
-            const visible = TABLE_CHART_TYPES.has(
-                typePicker.property("value")
-            );
-
-            tableLegendSection.style(
-                "display",
-                visible ? "block" : "none"
-            );
-        }
-
-        updateTableControlsVisibility();
-
         // =========================================================
         // CHART STRUCTURE
         // =========================================================
 
         const margin = {
-            top: 60,
+            top: 65,
             right: 30,
             bottom: 60,
-            left: 70
+            left: 100
         };
 
         const tooltip = d3
@@ -361,15 +205,25 @@ document.addEventListener('DOMContentLoaded', function () {
             .style("background-color", "#333")
             .style("color", "#fff")
             .style("padding", "8px 12px")
-            .style("border-radius", "4px")
-            .style("font-family", "sans-serif")
-            .style("font-size", "12px")
+            .style("border-radius", "6px")
+            .style("font-family", activeFont)
+            .style("font-size", "13px")
             .style("pointer-events", "none")
             .style(
                 "box-shadow",
-                "0 2px 5px rgba(0,0,0,0.2)"
+                "0 4px 10px rgba(0,0,0,0.25)"
             )
             .style("z-index", "99999");
+
+        function formatTooltipContent(mainContent, descriptionText) {
+            let html = `<div>${mainContent}</div>`;
+            if (descriptionText) {
+                html += `<div style="margin-top: 6px; padding: 6px 8px; background-color: #1e40af; color: #ffffff; border-radius: 4px; font-size: 12px; line-height: 1.3;">
+                    <strong>Description:</strong> ${descriptionText}
+                </div>`;
+            }
+            return html;
+        }
 
         const chartWrapperContainer = canvas
             .append("div")
@@ -441,17 +295,14 @@ document.addEventListener('DOMContentLoaded', function () {
             .style("width", "100%")
             .style("display", "flex")
             .style("justify-content", "flex-end")
-            .style("padding-top", "10px")
-            .style("padding-bottom", "10px");
-
-        const tableContainer = contentRow
-            .append("div")
-            .attr("id", `table-container-${uid}`);
+            .style("padding-top", "2px")
+            .style("padding-bottom", "5px");
 
         const svgOuter = contentRow
             .append("svg")
             .attr("class", `parola-chart-svg-${uid}`)
-            .style("overflow", "visible");
+            .style("overflow", "visible")
+            .style("width", "100%");
 
         const svg = svgOuter
             .append("g")
@@ -470,22 +321,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const mainTitleText = svg
             .append("text")
-            .attr("x", 0)
-            .attr("y", -35)
+            .attr("x", -margin.left)
+            .attr("y", -40)
             .attr("text-anchor", "start")
             .style("font-weight", "bold");
 
         const subtitleText = svg
             .append("text")
-            .attr("x", 0)
-            .attr("y", -15)
+            .attr("x", -margin.left)
+            .attr("y", -18)
             .attr("text-anchor", "start")
             .attr("fill", "#545454");
 
         let currentData = [];
         let naturalWrapperWidth = 0;
         let naturalWrapperHeight = 0;
-                // =========================================================
+
+        // =========================================================
         // RESPONSIVE SCALING
         // =========================================================
 
@@ -571,49 +423,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 svgOuter.attr("width")
                             ) || 0;
 
-                        const tableVisible =
-                            tableContainer.style(
-                                "display"
-                            ) !== "none";
-
-                        const containerWidth =
-                            canvas
-                                .node()
-                                .getBoundingClientRect()
-                                .width || 550;
-
-                        const activeType =
-                            typePicker.property("value");
-
-                        let tableWidth = 0;
-
-                        if (tableVisible) {
-                            if (
-                                activeType ===
-                                    "horizontal-bar" ||
-                                activeType ===
-                                    "horizontal-stacked-bar"
-                            ) {
-                                tableWidth = Math.max(
-                                    120,
-                                    Math.min(
-                                        240,
-                                        containerWidth * 0.3
-                                    )
-                                );
-                            } else {
-                                tableWidth = Math.max(
-                                    180,
-                                    Math.min(
-                                        300,
-                                        containerWidth * 0.4
-                                    )
-                                );
-                            }
-                        }
-
-                        naturalWrapperWidth =
-                            svgWidth + tableWidth;
+                        naturalWrapperWidth = svgWidth;
 
                         naturalWrapperHeight =
                             chartWrapper
@@ -630,55 +440,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                 });
             });
-        }
-
-        function applyTableLegendContainerStyles() {
-            const containerWidth =
-                canvas
-                    .node()
-                    .getBoundingClientRect()
-                    .width || 550;
-
-            const activeType =
-                typePicker.property("value");
-
-            let targetWidth;
-
-            if (
-                activeType === "horizontal-bar" ||
-                activeType ===
-                    "horizontal-stacked-bar"
-            ) {
-                targetWidth = Math.max(
-                    120,
-                    Math.min(
-                        240,
-                        containerWidth * 0.3
-                    )
-                );
-            } else {
-                targetWidth = Math.max(
-                    180,
-                    Math.min(
-                        300,
-                        containerWidth * 0.4
-                    )
-                );
-            }
-
-            tableContainer
-                .style("display", "block")
-                .style("position", "relative")
-                .style("left", "0px")
-                .style("top", "0px")
-                .style("margin", "0")
-                .style("padding", "0")
-                .style(
-                    "width",
-                    `${targetWidth}px`
-                )
-                .style("overflow", "visible")
-                .style("transform", null);
         }
 
         function applyChartContainerStyles() {
@@ -717,30 +478,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 let maxContentBottom = 0;
                 let maxContentRight = 0;
 
-                if (
-                    tableContainer.style(
-                        "display"
-                    ) !== "none" &&
-                    tableContainer.node()
-                ) {
-                    const tableRect =
-                        tableContainer
-                            .node()
-                            .getBoundingClientRect();
-
-                    maxContentBottom = Math.max(
-                        maxContentBottom,
-                        tableRect.bottom -
-                            contentRect.top
-                    );
-
-                    maxContentRight = Math.max(
-                        maxContentRight,
-                        tableRect.right -
-                            contentRect.left
-                    );
-                }
-
                 if (svgOuter.node()) {
                     const chartRect =
                         svgOuter
@@ -750,13 +487,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     maxContentBottom = Math.max(
                         maxContentBottom,
                         chartRect.bottom -
-                            contentRect.top
+                        contentRect.top
                     );
 
                     maxContentRight = Math.max(
                         maxContentRight,
                         chartRect.right -
-                            contentRect.left
+                        contentRect.left
                     );
                 }
 
@@ -777,19 +514,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 const headerHeight =
                     headerRow.node()
                         ? headerRow
-                              .node()
-                              .getBoundingClientRect()
-                              .height
+                            .node()
+                            .getBoundingClientRect()
+                            .height
                         : 0;
 
                 const logoHeight =
                     logoRow.node() &&
-                    logoRow.node().children
-                        .length > 0
+                        logoRow.node().children
+                            .length > 0
                         ? logoRow
-                              .node()
-                              .getBoundingClientRect()
-                              .height
+                            .node()
+                            .getBoundingClientRect()
+                            .height
                         : 0;
 
                 const totalRequiredHeight =
@@ -812,7 +549,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     maxRight = Math.max(
                         maxRight,
                         logoRect.right -
-                            wrapperRect.left
+                        wrapperRect.left
                     );
                 }
 
@@ -821,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         "min-height",
                         `${Math.ceil(
                             totalRequiredHeight +
-                                layoutBuffer
+                            layoutBuffer
                         )}px`
                     )
                     .style(
@@ -848,27 +585,17 @@ document.addEventListener('DOMContentLoaded', function () {
         function renderHTMLHeader(
             mainTitleValue,
             subtitleValue,
-            activeFont,
             mainTitleSize,
             activeType,
-            showTable,
             valueKeys,
             tickSize
         ) {
-            const usesTableLegendLayout =
-                TABLE_CHART_TYPES.has(
-                    activeType
-                ) && showTable;
-
             const isStackedType =
                 activeType === "stacked-bar" ||
                 activeType ===
-                    "horizontal-stacked-bar";
+                "horizontal-stacked-bar";
 
-            if (
-                !usesTableLegendLayout &&
-                !isStackedType
-            ) {
+            if (!isStackedType) {
                 headerRow.style(
                     "display",
                     "none"
@@ -887,11 +614,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 "flex"
             );
 
-            const subtitleSize =
-                `${Math.max(
-                    10,
-                    parseFloat(mainTitleSize) - 4
-                )}px`;
+            const subtitleSize = "16px";
 
             headerTitle
                 .text(mainTitleValue)
@@ -932,7 +655,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             function (_, index) {
                                 return stackedColors[
                                     index %
-                                        stackedColors.length
+                                    stackedColors.length
                                 ];
                             }
                         )
@@ -940,9 +663,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (
                 activeType ===
-                    "horizontal-stacked-bar" ||
+                "horizontal-stacked-bar" ||
                 activeType ===
-                    "stacked-bar"
+                "stacked-bar"
             ) {
                 headerLegend
                     .style(
@@ -1014,315 +737,57 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        function applyTableLegendScale(
-            table
-        ) {
-            const containerWidth =
-                canvas
-                    .node()
-                    .getBoundingClientRect()
-                    .width || 550;
+        // Helper function to check if label fits inside SVG bounding box
+        function checkAndFilterOverlappingLabels(labelsSelection) {
+            labelsSelection.each(function () {
+                const label = d3.select(this);
+                if (label.style("display") === "none") return;
 
-            const activeType =
-                typePicker.property("value");
+                const boundingBox = this.getBBox();
+                const parentBox = this.parentNode ? this.parentNode.getBBox() : null;
 
-            let targetWidth;
-
-            if (
-                activeType ===
-                    "horizontal-bar" ||
-                activeType ===
-                    "horizontal-stacked-bar"
-            ) {
-                targetWidth = Math.max(
-                    120,
-                    Math.min(
-                        240,
-                        containerWidth * 0.3
-                    )
-                );
-            } else {
-                targetWidth = Math.max(
-                    180,
-                    Math.min(
-                        300,
-                        containerWidth * 0.4
-                    )
-                );
-            }
-
-            let chartWidth = containerWidth;
-            let chartHeight = Math.max(
-                300,
-                containerWidth * 0.65
-            );
-
-            if (activeType === "pie") {
-                const size = Math.min(
-                    chartWidth,
-                    480
-                );
-
-                chartWidth = size;
-                chartHeight = size;
-            }
-
-            table
-                .style(
-                    "width",
-                    `${targetWidth}px`
-                )
-                .style(
-                    "height",
-                    `${chartHeight}px`
-                );
-        }
-
-        function renderHorizontalBarLegendTable(
-            data,
-            categoryKey,
-            activeFont,
-            legendFontSize,
-            borderThickness,
-            yScale,
-            svgMarginTop
-        ) {
-            applyTableLegendContainerStyles();
-
-            const scrollbarStyleId =
-                `hide-scrollbar-style-${uid}`;
-
-            if (
-                d3.select(
-                    `#${scrollbarStyleId}`
-                ).empty()
-            ) {
-                d3.select("head")
-                    .append("style")
-                    .attr(
-                        "id",
-                        scrollbarStyleId
-                    )
-                    .text(`
-                        .parola-no-scrollbar-${uid}::-webkit-scrollbar {
-                            display: none;
-                        }
-
-                        .parola-no-scrollbar-${uid} {
-                            -ms-overflow-style: none;
-                            scrollbar-width: none;
-                        }
-                    `);
-            }
-
-            const bandHeight =
-                yScale.bandwidth();
-
-            const containerWidth =
-                canvas
-                    .node()
-                    .getBoundingClientRect()
-                    .width || 550;
-
-            const activeType =
-                typePicker.property("value");
-
-            const chartHeight = Math.max(
-                300,
-                containerWidth * 0.65
-            );
-
-            let targetWidth;
-
-            if (
-                activeType ===
-                    "horizontal-bar" ||
-                activeType ===
-                    "horizontal-stacked-bar"
-            ) {
-                targetWidth = Math.max(
-                    120,
-                    Math.min(
-                        240,
-                        containerWidth * 0.3
-                    )
-                );
-            } else {
-                targetWidth = Math.max(
-                    180,
-                    Math.min(
-                        300,
-                        containerWidth * 0.4
-                    )
-                );
-            }
-
-            tableContainer
-                .style(
-                    "position",
-                    "relative"
-                )
-                .style(
-                    "height",
-                    `${chartHeight}px`
-                );
-
-            const marginTop =
-                svgMarginTop || 0;
-
-            data.forEach(
-                function (row, index) {
-                    const top =
-                        yScale(
-                            row[categoryKey]
-                        ) + marginTop;
-
-                    const description =
-                        tableContainer
-                            .append("div")
-                            .style(
-                                "position",
-                                "absolute"
-                            )
-                            .style(
-                                "left",
-                                "0"
-                            )
-                            .style(
-                                "top",
-                                `${top}px`
-                            )
-                            .style(
-                                "width",
-                                `${targetWidth}px`
-                            )
-                            .style(
-                                "height",
-                                `${bandHeight}px`
-                            )
-                            .style(
-                                "display",
-                                "flex"
-                            )
-                            .style(
-                                "align-items",
-                                "center"
-                            )
-                            .style(
-                                "justify-content",
-                                "flex-end"
-                            )
-                            .style(
-                                "box-sizing",
-                                "border-box"
-                            )
-                            .style(
-                                "font-family",
-                                activeFont
-                            )
-                            .style(
-                                "font-size",
-                                legendFontSize
-                            );
-
-                    description
-                        .append("div")
-                        .attr(
-                            "class",
-                            `parola-no-scrollbar-${uid}`
-                        )
-                        .style(
-                            "max-width",
-                            "100%"
-                        )
-                        .style(
-                            "overflow-x",
-                            "auto"
-                        )
-                        .style(
-                            "overflow-y",
-                            "hidden"
-                        )
-                        .style(
-                            "white-space",
-                            "nowrap"
-                        )
-                        .style(
-                            "text-align",
-                            "right"
-                        )
-                        .text(function () {
-                            const descriptionKey =
-                                Object.keys(
-                                    row
-                                ).find(
-                                    function (
-                                        key
-                                    ) {
-                                        return (
-                                            key.toLowerCase() ===
-                                            "description"
-                                        );
-                                    }
-                                );
-
-                            return descriptionKey
-                                ? String(
-                                      row[
-                                          descriptionKey
-                                      ] || ""
-                                  )
-                                : "";
-                        });
-
+                if (parentBox) {
                     if (
-                        index <
-                        data.length - 1
+                        boundingBox.width > parentBox.width ||
+                        boundingBox.height > parentBox.height
                     ) {
-                        const nextTop =
-                            yScale(
-                                data[
-                                    index + 1
-                                ][categoryKey]
-                            ) + marginTop;
-
-                        const lineTop =
-                            (
-                                top +
-                                bandHeight +
-                                nextTop
-                            ) / 2;
-
-                        tableContainer
-                            .append("div")
-                            .style(
-                                "position",
-                                "absolute"
-                            )
-                            .style(
-                                "left",
-                                "0"
-                            )
-                            .style(
-                                "top",
-                                `${lineTop}px`
-                            )
-                            .style(
-                                "width",
-                                `${targetWidth}px`
-                            )
-                            .style(
-                                "height",
-                                `${borderThickness}px`
-                            )
-                            .style(
-                                "background-color",
-                                "#858585"
-                            );
+                        label.style("display", "none");
                     }
                 }
-            );
+            });
         }
+
+        // Helper: draw a rect with rounded top-left and top-right corners only (for vertical bars)
+        function roundedTopRect(x, y, w, h, r) {
+            if (h <= 0 || w <= 0) return "";
+            const cr = Math.min(r, w / 2, h);
+            return [
+                `M ${x + cr} ${y}`,
+                `H ${x + w - cr}`,
+                `Q ${x + w} ${y} ${x + w} ${y + cr}`,
+                `V ${y + h}`,
+                `H ${x}`,
+                `V ${y + cr}`,
+                `Q ${x} ${y} ${x + cr} ${y}`,
+                "Z"
+            ].join(" ");
+        }
+
+        // Helper: draw a rect with rounded top-right and bottom-right corners only (for horizontal bars)
+        function roundedRightRect(x, y, w, h, r) {
+            if (w <= 0 || h <= 0) return "";
+            const cr = Math.min(r, h / 2, w);
+            return [
+                `M ${x} ${y}`,
+                `H ${x + w - cr}`,
+                `Q ${x + w} ${y} ${x + w} ${y + cr}`,
+                `V ${y + h - cr}`,
+                `Q ${x + w} ${y + h} ${x + w - cr} ${y + h}`,
+                `H ${x}`,
+                "Z"
+            ].join(" ");
+        }
+
         // =========================================================
         // MAIN CHART RENDERER
         // =========================================================
@@ -1334,9 +799,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
             currentData = data;
 
-            const activeFont =
-                fontPicker.property("value");
-
             const activeType =
                 typePicker.property("value");
 
@@ -1346,25 +808,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     .getBoundingClientRect()
                     .width || 550;
 
-            let chartWidth =
-                containerWidth;
-
-            let chartHeight =
-                Math.max(
-                    300,
-                    containerWidth * 0.65
-                );
-
-            if (activeType === "pie") {
-                const size =
-                    Math.min(
-                        chartWidth,
-                        480
-                    );
-
-                chartWidth = size;
-                chartHeight = size;
-            }
+            let chartWidth = containerWidth;
+            let chartHeight = Math.max(
+                320,
+                containerWidth * 0.65
+            );
 
             const activeWidth =
                 chartWidth -
@@ -1380,14 +828,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 .attr(
                     "width",
                     activeWidth +
-                        margin.left +
-                        margin.right
+                    margin.left +
+                    margin.right
                 )
                 .attr(
                     "height",
                     activeHeight +
-                        margin.top +
-                        margin.bottom
+                    margin.top +
+                    margin.bottom
                 );
 
             xAxisGroup.attr(
@@ -1403,35 +851,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 currentSubtitle ||
                 "Global Patent Trends";
 
-            const mainTitleSize =
-                `${Math.max(
-                    14,
-                    Math.min(
-                        22,
-                        chartWidth * 0.035
-                    )
-                )}px`;
-
-            const tickSize =
-                `${Math.max(
-                    9,
-                    Math.min(
-                        13,
-                        chartWidth * 0.02
-                    )
-                )}px`;
-
-            const legendFontSize =
-                `${Math.max(
-                    10,
-                    Math.min(
-                        14,
-                        chartWidth * 0.022
-                    )
-                )}px`;
+            // Readable standard font sizes (Title: 22px, Subtitle: 16px, Axis: 13px, Shape: 14px, Pie Shape: 12px)
+            const mainTitleSize = "22px";
+            const subtitleSize = "16px";
+            const tickSize = "13px";
+            const shapeTextSize = "14px";
+            const pieShapeTextSize = "12px";
 
             mainTitleText
                 .text(mainTitleValue)
+                .attr("x", -margin.left)
+                .attr("y", -40)
                 .style(
                     "font-family",
                     activeFont
@@ -1443,32 +873,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
             subtitleText
                 .text(subtitleValue)
+                .attr("x", -margin.left)
+                .attr("y", -18)
                 .style(
                     "font-family",
                     activeFont
                 )
                 .style(
                     "font-size",
-                    `${Math.max(
-                        10,
-                        parseFloat(
-                            mainTitleSize
-                        ) - 4
-                    )}px`
+                    subtitleSize
                 );
-
-            const showTable =
-                tableToggle.property(
-                    "checked"
-                );
-
-            const borderThickness = 1;
 
             // Detect category, description and numeric columns.
             const keys =
                 Object.keys(data[0]);
 
+            // Find category column dynamically or use first key
             const categoryKey =
+                keys.find(k => k.toLowerCase() === 'company' || k.toLowerCase() === 'category') ||
                 keys[0] || "Company";
 
             const descriptionKey =
@@ -1483,19 +905,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
             let valueKeys =
                 keys
-                    .slice(1)
+                    .filter(key => key !== categoryKey && key !== descriptionKey)
                     .filter(
                         function (key) {
-                            if (
-                                key ===
-                                descriptionKey
-                            ) {
-                                return false;
-                            }
-
                             return (
                                 typeof data[0][key] ===
-                                    "number" ||
+                                "number" ||
                                 !isNaN(
                                     parseFloat(
                                         data[0][key]
@@ -1518,9 +933,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         function (key) {
                             if (
                                 row[key] !==
-                                    undefined &&
+                                undefined &&
                                 typeof row[key] ===
-                                    "string"
+                                "string"
                             ) {
                                 row[key] =
                                     parseFloat(
@@ -1532,36 +947,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             );
 
-            // Reset the table legend before each render.
-            tableContainer
-                .selectAll("*")
-                .remove();
-
-            tableContainer
-                .style(
-                    "display",
-                    "none"
-                )
-                .style(
-                    "padding-top",
-                    "0"
-                )
-                .style(
-                    "transform",
-                    null
-                );
-
-            const usesTableLegendLayout =
-                TABLE_CHART_TYPES.has(
-                    activeType
-                ) && showTable;
-
             if (
-                usesTableLegendLayout ||
                 activeType ===
-                    "stacked-bar" ||
+                "stacked-bar" ||
                 activeType ===
-                    "horizontal-stacked-bar"
+                "horizontal-stacked-bar"
             ) {
                 mainTitleText.style(
                     "display",
@@ -1587,10 +977,8 @@ document.addEventListener('DOMContentLoaded', function () {
             renderHTMLHeader(
                 mainTitleValue,
                 subtitleValue,
-                activeFont,
                 mainTitleSize,
                 activeType,
-                showTable,
                 valueKeys,
                 tickSize
             );
@@ -1632,6 +1020,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 ".total-label"
             ).remove();
 
+            svg.selectAll(".bar-path").remove();
+            svg.selectAll(".hbar-path").remove();
+            svg.selectAll(".hbar-label").remove();
+
             // =====================================================
             // PIE CHART
             // =====================================================
@@ -1647,25 +1039,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     "none"
                 );
 
-                const baseRadius = 100;
-
-                const radiusX =
-                    Math.max(
-                        10,
-                        activeWidth / 2 - 10
-                    );
-
-                const radiusY =
-                    Math.max(
-                        10,
-                        activeHeight / 2 - 10
-                    );
-
-                const scaleX =
-                    radiusX / baseRadius;
-
-                const scaleY =
-                    radiusY / baseRadius;
+                const outerMargin = 35;
+                const radiusX = Math.max(20, activeWidth / 2 - outerMargin);
+                const radiusY = Math.max(20, activeHeight / 2 - outerMargin);
+                const radius = Math.min(radiusX, radiusY);
+                const baseRadius = radius;
+                const scaleX = 1;
+                const scaleY = 1;
 
                 const pieGroup =
                     svg.append("g")
@@ -1675,10 +1055,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         )
                         .attr(
                             "transform",
-                            `translate(${
-                                activeWidth / 2
-                            },${
-                                activeHeight / 2
+                            `translate(${activeWidth / 2
+                            },${activeHeight / 2 + 12
                             })`
                         );
 
@@ -1688,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             function (row) {
                                 return (
                                     row[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 );
                             }
@@ -1730,12 +1108,12 @@ document.addEventListener('DOMContentLoaded', function () {
                             return (
                                 (
                                     b[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 ) -
                                 (
                                     a[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 )
                             );
@@ -1752,11 +1130,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     ) {
                         colorMap.set(
                             row[
-                                categoryKey
+                            categoryKey
                             ],
                             PIE_COLORS[
-                                index %
-                                    PIE_COLORS.length
+                            index %
+                            PIE_COLORS.length
                             ]
                         );
                     }
@@ -1778,7 +1156,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             "arc"
                         );
 
-                arcs.append("path")
+                const pieSlicePaths = arcs.append("path")
                     .attr("d", arc)
                     .attr(
                         "transform",
@@ -1788,84 +1166,37 @@ document.addEventListener('DOMContentLoaded', function () {
                         "fill",
                         function (slice) {
                             return colorMap.get(
-                                slice.data[
-                                    categoryKey
-                                ]
+                                slice.data[categoryKey]
                             );
                         }
                     )
-                    .attr(
-                        "stroke",
-                        "none"
-                    )
-                    .style(
-                        "cursor",
-                        "pointer"
-                    )
+                    .attr("stroke", "none")
+                    .style("cursor", "pointer")
                     .on(
                         "mouseover",
                         function () {
-                            d3.select(this)
-                                .attr(
-                                    "opacity",
-                                    0.85
-                                );
-
-                            tooltip.style(
-                                "visibility",
-                                "visible"
-                            );
+                            // Dim all slices, brighten hovered
+                            pieGroup.selectAll("path").attr("opacity", 0.3);
+                            d3.select(this).attr("opacity", 1);
+                            tooltip.style("visibility", "visible");
                         }
                     )
                     .on(
                         "mousemove",
-                        function (
-                            event,
-                            slice
-                        ) {
+                        function (event, slice) {
+                            const desc = descriptionKey ? slice.data[descriptionKey] : null;
+                            const mainTxt = `<strong>${categoryKey}:</strong> ${slice.data[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${slice.data[valueKeys[0]]}`;
                             tooltip
-                                .html(
-                                    `<strong>${categoryKey}:</strong> ${
-                                        slice
-                                            .data[
-                                            categoryKey
-                                        ]
-                                    }<br><strong>${valueKeys[0]}:</strong> ${
-                                        slice
-                                            .data[
-                                            valueKeys[0]
-                                        ]
-                                    }`
-                                )
-                                .style(
-                                    "top",
-                                    `${
-                                        event.pageY +
-                                        10
-                                    }px`
-                                )
-                                .style(
-                                    "left",
-                                    `${
-                                        event.pageX +
-                                        10
-                                    }px`
-                                );
+                                .html(formatTooltipContent(mainTxt, desc))
+                                .style("top", `${event.pageY + 10}px`)
+                                .style("left", `${event.pageX + 10}px`);
                         }
                     )
                     .on(
                         "mouseout",
                         function () {
-                            d3.select(this)
-                                .attr(
-                                    "opacity",
-                                    1
-                                );
-
-                            tooltip.style(
-                                "visibility",
-                                "hidden"
-                            );
+                            pieGroup.selectAll("path").attr("opacity", 1);
+                            tooltip.style("visibility", "hidden");
                         }
                     );
 
@@ -1875,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -1910,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     slice.endAngle -
                                     slice.startAngle
                                 ) /
-                                    2;
+                                2;
 
                             return middleAngle <
                                 Math.PI
@@ -1924,7 +1255,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     )
                     .style(
                         "font-size",
-                        tickSize
+                        pieShapeTextSize
                     )
                     .style(
                         "fill",
@@ -1934,27 +1265,23 @@ document.addEventListener('DOMContentLoaded', function () {
                         function (slice) {
                             const value =
                                 slice.data[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0;
 
                             const percentage =
                                 totalSum > 0
                                     ? (
-                                          (
-                                              value /
-                                              totalSum
-                                          ) *
-                                          100
-                                      ).toFixed(
-                                          1
-                                      )
+                                        (
+                                            value /
+                                            totalSum
+                                        ) *
+                                        100
+                                    ).toFixed(
+                                        1
+                                    )
                                     : 0;
 
-                            return `${
-                                slice.data[
-                                    categoryKey
-                                ]
-                            } (${percentage}%)`;
+                            return `${slice.data[categoryKey]} (${percentage}%)`;
                         }
                     );
 
@@ -2012,21 +1339,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
                             const separated =
                                 box.right +
-                                    padding <
-                                    existingBox.left -
-                                        padding ||
+                                padding <
+                                existingBox.left -
+                                padding ||
                                 box.left -
-                                    padding >
-                                    existingBox.right +
-                                        padding ||
+                                padding >
+                                existingBox.right +
+                                padding ||
                                 box.bottom +
-                                    padding <
-                                    existingBox.top -
-                                        padding ||
+                                padding <
+                                existingBox.top -
+                                padding ||
                                 box.top -
-                                    padding >
-                                    existingBox.bottom +
-                                        padding;
+                                padding >
+                                existingBox.bottom +
+                                padding;
 
                             if (!separated) {
                                 overlaps =
@@ -2047,582 +1374,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }
                 );
-
-                // =================================================
-                // PIE LEGEND TABLE
-                // =================================================
-
-                if (showTable) {
-                    applyTableLegendContainerStyles();
-
-                    const targetWidth =
-                        Math.max(
-                            140,
-                            Math.min(
-                                220,
-                                containerWidth *
-                                    0.28
-                            )
-                        );
-
-                    const targetHeight =
-                        Math.min(
-                            containerWidth,
-                            480
-                        );
-
-                    const rowCount =
-                        sortedData.length;
-
-                    const rowHeight =
-                        targetHeight /
-                        Math.max(
-                            rowCount,
-                            1
-                        );
-
-                    const baseFontSize =
-                        parseFloat(
-                            legendFontSize
-                        ) || 12;
-
-                    const maxFontForRow =
-                        Math.max(
-                            7,
-                            rowHeight - 8
-                        );
-
-                    const pieLegendFontSize =
-                        `${Math.min(
-                            baseFontSize,
-                            maxFontForRow
-                        )}px`;
-
-                    const cellPadding =
-                        rowHeight < 24
-                            ? "1px 4px"
-                            : "4px 6px";
-
-                    tableContainer
-                        .style(
-                            "height",
-                            `${targetHeight}px`
-                        )
-                        .style(
-                            "overflow-y",
-                            "auto"
-                        )
-                        .style(
-                            "overflow-x",
-                            "hidden"
-                        )
-                        .style(
-                            "scrollbar-width",
-                            "thin"
-                        )
-                        .style(
-                            "direction",
-                            "rtl"
-                        );
-
-                    const table =
-                        tableContainer
-                            .append(
-                                "table"
-                            )
-                            .style(
-                                "direction",
-                                "ltr"
-                            )
-                            .style(
-                                "border-collapse",
-                                "collapse"
-                            )
-                            .style(
-                                "font-family",
-                                activeFont
-                            )
-                            .style(
-                                "table-layout",
-                                "fixed"
-                            );
-
-                    applyTableLegendScale(
-                        table
-                    );
-
-                    const rows =
-                        table
-                            .selectAll(
-                                "tr"
-                            )
-                            .data(
-                                sortedData
-                            )
-                            .enter()
-                            .append("tr")
-                            .style(
-                                "height",
-                                `${rowHeight}px`
-                            )
-                            .style(
-                                "box-sizing",
-                                "border-box"
-                            );
-
-                    rows.each(
-                        function (
-                            row,
-                            index
-                        ) {
-                            if (
-                                index <
-                                sortedData.length -
-                                    1
-                            ) {
-                                d3.select(
-                                    this
-                                ).style(
-                                    "border-bottom",
-                                    `${borderThickness}px solid #858585`
-                                );
-                            }
-                        }
-                    );
-
-                    let colorColumnWidth =
-                        customCol1Width !==
-                        null
-                            ? customCol1Width
-                            : rowHeight;
-
-                    let nameColumnWidth =
-                        customCol2Width !==
-                        null
-                            ? customCol2Width
-                            : colorColumnWidth;
-
-                    let descriptionColumnWidth =
-                        Math.max(
-                            10,
-                            targetWidth -
-                                colorColumnWidth -
-                                nameColumnWidth
-                        );
-
-                    const colorCells = [];
-                    const nameCells = [];
-                    const descriptionCells =
-                        [];
-
-                    rows.each(
-                        function (row) {
-                            const tableRow =
-                                d3.select(
-                                    this
-                                );
-
-                            const colorCell =
-                                tableRow
-                                    .append(
-                                        "td"
-                                    )
-                                    .style(
-                                        "width",
-                                        `${colorColumnWidth}px`
-                                    )
-                                    .style(
-                                        "min-width",
-                                        `${colorColumnWidth}px`
-                                    )
-                                    .style(
-                                        "padding",
-                                        "0"
-                                    )
-                                    .style(
-                                        "vertical-align",
-                                        "middle"
-                                    )
-                                    .style(
-                                        "position",
-                                        "relative"
-                                    )
-                                    .style(
-                                        "background-color",
-                                        colorMap.get(
-                                            row[
-                                                categoryKey
-                                            ]
-                                        )
-                                    );
-
-                            colorCells.push(
-                                colorCell
-                            );
-
-                            const nameCell =
-                                tableRow
-                                    .append(
-                                        "td"
-                                    )
-                                    .style(
-                                        "width",
-                                        `${nameColumnWidth}px`
-                                    )
-                                    .style(
-                                        "padding",
-                                        cellPadding
-                                    )
-                                    .style(
-                                        "vertical-align",
-                                        "middle"
-                                    )
-                                    .style(
-                                        "font-size",
-                                        pieLegendFontSize
-                                    )
-                                    .style(
-                                        "word-break",
-                                        "break-word"
-                                    )
-                                    .style(
-                                        "position",
-                                        "relative"
-                                    )
-                                    .text(
-                                        row[
-                                            categoryKey
-                                        ]
-                                    );
-
-                            nameCells.push(
-                                nameCell
-                            );
-
-                            const descriptionCell =
-                                tableRow
-                                    .append(
-                                        "td"
-                                    )
-                                    .style(
-                                        "width",
-                                        `${descriptionColumnWidth}px`
-                                    )
-                                    .style(
-                                        "padding",
-                                        cellPadding
-                                    )
-                                    .style(
-                                        "vertical-align",
-                                        "middle"
-                                    )
-                                    .style(
-                                        "font-size",
-                                        pieLegendFontSize
-                                    )
-                                    .style(
-                                        "position",
-                                        "relative"
-                                    );
-
-                            descriptionCells.push(
-                                descriptionCell
-                            );
-
-                            descriptionCell
-                                .append(
-                                    "div"
-                                )
-                                .style(
-                                    "min-height",
-                                    "1.2em"
-                                )
-                                .style(
-                                    "word-break",
-                                    "break-word"
-                                )
-                                .text(
-                                    descriptionKey
-                                        ? String(
-                                              row[
-                                                  descriptionKey
-                                              ] ||
-                                                  ""
-                                          )
-                                        : ""
-                                );
-
-                            const firstResizer =
-                                colorCell
-                                    .append(
-                                        "div"
-                                    )
-                                    .style(
-                                        "position",
-                                        "absolute"
-                                    )
-                                    .style(
-                                        "top",
-                                        "0"
-                                    )
-                                    .style(
-                                        "right",
-                                        "0"
-                                    )
-                                    .style(
-                                        "width",
-                                        "6px"
-                                    )
-                                    .style(
-                                        "height",
-                                        "100%"
-                                    )
-                                    .style(
-                                        "cursor",
-                                        "col-resize"
-                                    )
-                                    .style(
-                                        "z-index",
-                                        "10"
-                                    );
-
-                            firstResizer.on(
-                                "mousedown",
-                                function (
-                                    event
-                                ) {
-                                    event.preventDefault();
-
-                                    const startX =
-                                        event.clientX;
-
-                                    const startWidth =
-                                        colorColumnWidth;
-
-                                    d3.select(
-                                        window
-                                    ).on(
-                                        `mousemove.resizer1-${uid}`,
-                                        function (
-                                            moveEvent
-                                        ) {
-                                            const delta =
-                                                moveEvent.clientX -
-                                                startX;
-
-                                            colorColumnWidth =
-                                                Math.max(
-                                                    10,
-                                                    startWidth +
-                                                        delta
-                                                );
-
-                                            customCol1Width =
-                                                colorColumnWidth;
-
-                                            descriptionColumnWidth =
-                                                Math.max(
-                                                    10,
-                                                    targetWidth -
-                                                        colorColumnWidth -
-                                                        nameColumnWidth
-                                                );
-
-                                            colorCells.forEach(
-                                                function (
-                                                    cell
-                                                ) {
-                                                    cell.style(
-                                                        "width",
-                                                        `${colorColumnWidth}px`
-                                                    ).style(
-                                                        "min-width",
-                                                        `${colorColumnWidth}px`
-                                                    );
-                                                }
-                                            );
-
-                                            descriptionCells.forEach(
-                                                function (
-                                                    cell
-                                                ) {
-                                                    cell.style(
-                                                        "width",
-                                                        `${descriptionColumnWidth}px`
-                                                    );
-                                                }
-                                            );
-                                        }
-                                    );
-
-                                    d3.select(
-                                        window
-                                    ).on(
-                                        `mouseup.resizer1-${uid}`,
-                                        function () {
-                                            d3.select(
-                                                window
-                                            ).on(
-                                                `mousemove.resizer1-${uid}`,
-                                                null
-                                            );
-
-                                            d3.select(
-                                                window
-                                            ).on(
-                                                `mouseup.resizer1-${uid}`,
-                                                null
-                                            );
-
-                                            if (
-                                                currentData.length >
-                                                0
-                                            ) {
-                                                renderChart(
-                                                    currentData
-                                                );
-                                            }
-                                        }
-                                    );
-                                }
-                            );
-
-                            const secondResizer =
-                                nameCell
-                                    .append(
-                                        "div"
-                                    )
-                                    .style(
-                                        "position",
-                                        "absolute"
-                                    )
-                                    .style(
-                                        "top",
-                                        "0"
-                                    )
-                                    .style(
-                                        "right",
-                                        "0"
-                                    )
-                                    .style(
-                                        "width",
-                                        "6px"
-                                    )
-                                    .style(
-                                        "height",
-                                        "100%"
-                                    )
-                                    .style(
-                                        "cursor",
-                                        "col-resize"
-                                    )
-                                    .style(
-                                        "z-index",
-                                        "10"
-                                    );
-
-                            secondResizer.on(
-                                "mousedown",
-                                function (
-                                    event
-                                ) {
-                                    event.preventDefault();
-
-                                    const startX =
-                                        event.clientX;
-
-                                    const startWidth =
-                                        nameColumnWidth;
-
-                                    d3.select(
-                                        window
-                                    ).on(
-                                        `mousemove.resizer2-${uid}`,
-                                        function (
-                                            moveEvent
-                                        ) {
-                                            const delta =
-                                                moveEvent.clientX -
-                                                startX;
-
-                                            nameColumnWidth =
-                                                Math.max(
-                                                    10,
-                                                    startWidth +
-                                                        delta
-                                                );
-
-                                            customCol2Width =
-                                                nameColumnWidth;
-
-                                            descriptionColumnWidth =
-                                                Math.max(
-                                                    10,
-                                                    targetWidth -
-                                                        colorColumnWidth -
-                                                        nameColumnWidth
-                                                );
-
-                                            nameCells.forEach(
-                                                function (
-                                                    cell
-                                                ) {
-                                                    cell.style(
-                                                        "width",
-                                                        `${nameColumnWidth}px`
-                                                    );
-                                                }
-                                            );
-
-                                            descriptionCells.forEach(
-                                                function (
-                                                    cell
-                                                ) {
-                                                    cell.style(
-                                                        "width",
-                                                        `${descriptionColumnWidth}px`
-                                                    );
-                                                }
-                                            );
-                                        }
-                                    );
-
-                                    d3.select(
-                                        window
-                                    ).on(
-                                        `mouseup.resizer2-${uid}`,
-                                        function () {
-                                            d3.select(
-                                                window
-                                            ).on(
-                                                `mousemove.resizer2-${uid}`,
-                                                null
-                                            );
-
-                                            d3.select(
-                                                window
-                                            ).on(
-                                                `mouseup.resizer2-${uid}`,
-                                                null
-                                            );
-
-                                            if (
-                                                currentData.length >
-                                                0
-                                            ) {
-                                                renderChart(
-                                                    currentData
-                                                );
-                                            }
-                                        }
-                                    );
-                                }
-                            );
-                        }
-                    );
-                }
             }
-                        // =====================================================
+
+            // =====================================================
             // LINE CHART
             // =====================================================
 
@@ -2740,14 +1494,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     .on(
                         "mousemove",
                         function (event, row) {
+                            const desc = descriptionKey ? row[descriptionKey] : null;
+                            const mainTxt = `<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
                             tooltip
-                                .html(
-                                    `<strong>${categoryKey}:</strong> ${
-                                        row[categoryKey]
-                                    }<br><strong>${valueKeys[0]}:</strong> ${
-                                        row[valueKeys[0]]
-                                    }`
-                                )
+                                .html(formatTooltipContent(mainTxt, desc))
                                 .style(
                                     "top",
                                     `${event.pageY + 10}px`
@@ -2821,127 +1571,73 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 yAxisGroup.selectAll("*").remove();
 
-                const bars = svg
-                    .selectAll("rect")
+                const barPaths = svg
+                    .selectAll(".bar-path")
                     .data(data);
 
-                bars.exit().remove();
+                barPaths.exit().remove();
 
-                bars
+                const barCornerRadius = 4;
+
+                const mergedBarPaths = barPaths
                     .enter()
-                    .append("rect")
-                    .merge(bars)
-                    .attr("x", function (row) {
-                        return xScale(
-                            row[categoryKey]
-                        );
-                    })
-                    .attr("y", function (row) {
-                        return yScale(
-                            row[valueKeys[0]] || 0
-                        );
-                    })
-                    .attr(
-                        "width",
-                        xScale.bandwidth()
-                    )
-                    .attr("height", function (row) {
-                        return (
-                            activeHeight -
-                            yScale(
-                                row[valueKeys[0]] || 0
-                            )
-                        );
+                    .append("path")
+                    .attr("class", "bar-path")
+                    .merge(barPaths)
+                    .attr("d", function (row) {
+                        const bx = xScale(row[categoryKey]);
+                        const by = yScale(row[valueKeys[0]] || 0);
+                        const bw = xScale.bandwidth();
+                        const bh = activeHeight - by;
+                        return roundedTopRect(bx, by, bw, bh, barCornerRadius);
                     })
                     .attr("fill", "#1ea0af")
                     .style("cursor", "pointer")
                     .on("mouseover", function () {
-                        d3.select(this).attr(
-                            "fill",
-                            d3.rgb("#1ea0af").darker(0.5)
-                        );
+                        // Dim all bars, highlight hovered
+                        svg.selectAll(".bar-path").attr("opacity", 0.3);
+                        svg.selectAll(".bar-label").attr("opacity", 0.3);
+                        d3.select(this).attr("opacity", 1);
+                        // Keep its label bright
+                        const idx = mergedBarPaths.nodes().indexOf(this);
+                        d3.select(svg.selectAll(".bar-label").nodes()[idx]).attr("opacity", 1);
 
-                        tooltip.style(
-                            "visibility",
-                            "visible"
-                        );
+                        tooltip.style("visibility", "visible");
                     })
                     .on(
                         "mousemove",
                         function (event, row) {
+                            const desc = descriptionKey ? row[descriptionKey] : null;
+                            const mainTxt = `<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
                             tooltip
-                                .html(
-                                    `<strong>${categoryKey}:</strong> ${
-                                        row[categoryKey]
-                                    }<br><strong>${valueKeys[0]}:</strong> ${
-                                        row[valueKeys[0]]
-                                    }`
-                                )
-                                .style(
-                                    "top",
-                                    `${event.pageY + 10}px`
-                                )
-                                .style(
-                                    "left",
-                                    `${event.pageX + 10}px`
-                                );
+                                .html(formatTooltipContent(mainTxt, desc))
+                                .style("top", `${event.pageY + 10}px`)
+                                .style("left", `${event.pageX + 10}px`);
                         }
                     )
                     .on("mouseout", function () {
-                        d3.select(this).attr(
-                            "fill",
-                            "#1ea0af"
-                        );
-
-                        tooltip.style(
-                            "visibility",
-                            "hidden"
-                        );
+                        svg.selectAll(".bar-path").attr("opacity", 1);
+                        svg.selectAll(".bar-label").attr("opacity", 1);
+                        tooltip.style("visibility", "hidden");
                     });
 
+                // Labels outside bar on top, black, not bold
                 svg.selectAll(".bar-label")
                     .data(data)
                     .enter()
                     .append("text")
-                    .attr(
-                        "class",
-                        "bar-label"
-                    )
+                    .attr("class", "bar-label")
                     .attr("x", function (row) {
-                        return (
-                            xScale(
-                                row[categoryKey]
-                            ) +
-                            xScale.bandwidth() / 2
-                        );
+                        return xScale(row[categoryKey]) + xScale.bandwidth() / 2;
                     })
                     .attr("y", function (row) {
-                        return (
-                            yScale(
-                                row[valueKeys[0]] || 0
-                            ) + 15
-                        );
+                        return yScale(row[valueKeys[0]] || 0) - 5;
                     })
-                    .attr(
-                        "text-anchor",
-                        "middle"
-                    )
-                    .attr("fill", "#ffffff")
-                    .style(
-                        "font-family",
-                        activeFont
-                    )
-                    .style(
-                        "font-weight",
-                        "bold"
-                    )
-                    .style(
-                        "font-size",
-                        `${Math.max(
-                            10,
-                            parseFloat(tickSize)
-                        )}px`
-                    )
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "#000000")
+                    .style("font-family", activeFont)
+                    .style("font-weight", "normal")
+                    .style("font-size", shapeTextSize)
                     .text(function (row) {
                         return row[valueKeys[0]] || 0;
                     });
@@ -3000,88 +1696,100 @@ document.addEventListener('DOMContentLoaded', function () {
                     .style("font-family", activeFont)
                     .style("font-size", tickSize);
 
-                const bars = svg
-                    .selectAll("rect")
+                // Measure y-axis label width and dynamically adjust layout if needed
+                let maxYLabelWidth = 0;
+                yAxisGroup.selectAll("text").each(function () {
+                    const bbox = this.getBBox();
+                    if (bbox.width > maxYLabelWidth) {
+                        maxYLabelWidth = bbox.width;
+                    }
+                });
+
+                const extraLeftMargin = Math.max(margin.left, maxYLabelWidth + 15);
+                const dynamicActiveWidth = chartWidth - extraLeftMargin - margin.right;
+
+                svg.attr("transform", `translate(${extraLeftMargin},${margin.top})`);
+                mainTitleText.attr("x", -extraLeftMargin);
+                subtitleText.attr("x", -extraLeftMargin);
+
+                xScale.range([0, dynamicActiveWidth]);
+                const currentActiveWidth = dynamicActiveWidth;
+
+                const hBarPaths = svg
+                    .selectAll(".hbar-path")
                     .data(data);
 
-                bars.exit().remove();
+                hBarPaths.exit().remove();
 
-                bars
+                const hBarCornerRadius = 4;
+
+                const mergedHBarPaths = hBarPaths
                     .enter()
-                    .append("rect")
-                    .merge(bars)
-                    .attr("x", 0)
-                    .attr("y", function (row) {
-                        return yScale(
-                            row[categoryKey]
-                        );
+                    .append("path")
+                    .attr("class", "hbar-path")
+                    .merge(hBarPaths)
+                    .attr("d", function (row) {
+                        const bx = 0;
+                        const by = yScale(row[categoryKey]);
+                        const bw = xScale(row[valueKeys[0]] || 0);
+                        const bh = yScale.bandwidth();
+                        return roundedRightRect(bx, by, bw, bh, hBarCornerRadius);
                     })
-                    .attr("width", function (row) {
-                        return xScale(
-                            row[valueKeys[0]] || 0
-                        );
-                    })
-                    .attr(
-                        "height",
-                        yScale.bandwidth()
-                    )
                     .attr("fill", "#1ea0af")
                     .style("cursor", "pointer")
                     .on("mouseover", function () {
-                        d3.select(this).attr(
-                            "fill",
-                            d3.rgb("#1ea0af").darker(0.5)
-                        );
-
-                        tooltip.style(
-                            "visibility",
-                            "visible"
-                        );
+                        svg.selectAll(".hbar-path").attr("opacity", 0.3);
+                        svg.selectAll(".hbar-label").attr("opacity", 0.3);
+                        d3.select(this).attr("opacity", 1);
+                        const idx = mergedHBarPaths.nodes().indexOf(this);
+                        d3.select(svg.selectAll(".hbar-label").nodes()[idx]).attr("opacity", 1);
+                        tooltip.style("visibility", "visible");
                     })
                     .on(
                         "mousemove",
                         function (event, row) {
+                            const desc = descriptionKey ? row[descriptionKey] : null;
+                            const mainTxt = `<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
                             tooltip
-                                .html(
-                                    `<strong>${categoryKey}:</strong> ${
-                                        row[categoryKey]
-                                    }<br><strong>${valueKeys[0]}:</strong> ${
-                                        row[valueKeys[0]]
-                                    }`
-                                )
-                                .style(
-                                    "top",
-                                    `${event.pageY + 10}px`
-                                )
-                                .style(
-                                    "left",
-                                    `${event.pageX + 10}px`
-                                );
+                                .html(formatTooltipContent(mainTxt, desc))
+                                .style("top", `${event.pageY + 10}px`)
+                                .style("left", `${event.pageX + 10}px`);
                         }
                     )
                     .on("mouseout", function () {
-                        d3.select(this).attr(
-                            "fill",
-                            "#1ea0af"
-                        );
-
-                        tooltip.style(
-                            "visibility",
-                            "hidden"
-                        );
+                        svg.selectAll(".hbar-path").attr("opacity", 1);
+                        svg.selectAll(".hbar-label").attr("opacity", 1);
+                        tooltip.style("visibility", "hidden");
                     });
 
-                if (showTable) {
-                    renderHorizontalBarLegendTable(
-                        data,
-                        categoryKey,
-                        activeFont,
-                        tickSize,
-                        borderThickness,
-                        yScale,
-                        margin.top
-                    );
-                }
+                // Labels outside bar to the right, black, not bold, clipped to chart width
+                svg.selectAll(".hbar-label")
+                    .data(data)
+                    .enter()
+                    .append("text")
+                    .attr("class", "hbar-label")
+                    .attr("x", function (row) {
+                        return xScale(row[valueKeys[0]] || 0) + 6;
+                    })
+                    .attr("y", function (row) {
+                        return yScale(row[categoryKey]) + yScale.bandwidth() / 2;
+                    })
+                    .attr("dy", "0.35em")
+                    .attr("text-anchor", "start")
+                    .attr("fill", "#000000")
+                    .style("font-family", activeFont)
+                    .style("font-weight", "normal")
+                    .style("font-size", shapeTextSize)
+                    .text(function (row) {
+                        return row[valueKeys[0]] || 0;
+                    })
+                    .each(function () {
+                        // Hide label if it spills beyond the chart right edge
+                        const bbox = this.getBBox();
+                        if (bbox.x + bbox.width > activeWidth) {
+                            d3.select(this).style("display", "none");
+                        }
+                    });
             }
 
             // =====================================================
@@ -3157,7 +1865,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             function (_, index) {
                                 return stackedColors[
                                     index %
-                                        stackedColors.length
+                                    stackedColors.length
                                 ];
                             }
                         )
@@ -3199,87 +1907,52 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 segments.exit().remove();
 
+                const stackCornerRadius = 4;
+
                 segments
                     .enter()
-                    .append("rect")
+                    .append("path")
                     .merge(segments)
-                    .attr("x", function (segment) {
-                        return xScale(
-                            segment.data[
-                                categoryKey
-                            ]
-                        );
-                    })
-                    .attr("y", function (segment) {
-                        return yScale(
-                            segment[1]
-                        );
-                    })
-                    .attr(
-                        "width",
-                        xScale.bandwidth()
-                    )
-                    .attr("height", function (segment) {
-                        return (
-                            yScale(segment[0]) -
-                            yScale(segment[1])
-                        );
+                    .attr("d", function (segment) {
+                        const bx = xScale(segment.data[categoryKey]);
+                        const by = yScale(segment[1]);
+                        const bw = xScale.bandwidth();
+                        const bh = yScale(segment[0]) - yScale(segment[1]);
+                        // Only round top corners for the topmost segment (segment[0] == 0 means bottom-most stack, skip; round always for visual consistency)
+                        return roundedTopRect(bx, by, bw, bh, stackCornerRadius);
                     })
                     .style("cursor", "pointer")
                     .on("mouseover", function () {
-                        d3.select(this).attr(
-                            "opacity",
-                            0.85
-                        );
+                        // Dim all stack rects
+                        svg.selectAll(".stack-layer path").attr("opacity", 0.3);
+                        d3.select(this).attr("opacity", 1);
 
-                        tooltip.style(
-                            "visibility",
-                            "visible"
-                        );
+                        tooltip.style("visibility", "visible");
                     })
                     .on(
                         "mousemove",
                         function (event, segment) {
                             const layerKey =
-                                d3.select(
-                                    this.parentNode
-                                ).datum().key;
+                                d3.select(this.parentNode).datum().key;
 
                             const segmentValue =
-                                segment[1] -
-                                segment[0];
+                                segment[1] - segment[0];
+
+                            const desc = descriptionKey ? segment.data[descriptionKey] : null;
+                            const mainTxt = `<strong>${categoryKey}:</strong> ${segment.data[categoryKey]}<br><strong>${layerKey}:</strong> ${segmentValue}`;
 
                             tooltip
-                                .html(
-                                    `<strong>${categoryKey}:</strong> ${
-                                        segment.data[
-                                            categoryKey
-                                        ]
-                                    }<br><strong>${layerKey}:</strong> ${segmentValue}`
-                                )
-                                .style(
-                                    "top",
-                                    `${event.pageY + 10}px`
-                                )
-                                .style(
-                                    "left",
-                                    `${event.pageX + 10}px`
-                                );
+                                .html(formatTooltipContent(mainTxt, desc))
+                                .style("top", `${event.pageY + 10}px`)
+                                .style("left", `${event.pageX + 10}px`);
                         }
                     )
                     .on("mouseout", function () {
-                        d3.select(this).attr(
-                            "opacity",
-                            1
-                        );
-
-                        tooltip.style(
-                            "visibility",
-                            "hidden"
-                        );
+                        svg.selectAll(".stack-layer path").attr("opacity", 1);
+                        tooltip.style("visibility", "hidden");
                     });
 
-                mergedLayers
+                const stackLabels = mergedLayers
                     .selectAll(".stack-label")
                     .data(function (layer) {
                         return layer;
@@ -3294,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         return (
                             xScale(
                                 segment.data[
-                                    categoryKey
+                                categoryKey
                                 ]
                             ) +
                             xScale.bandwidth() / 2
@@ -3302,8 +1975,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     })
                     .attr("y", function (segment) {
                         return (
-                            yScale(segment[1]) +
-                            12
+                            yScale(segment[1]) + 15
                         );
                     })
                     .attr(
@@ -3317,10 +1989,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     )
                     .style(
                         "font-size",
-                        `${Math.max(
-                            9,
-                            parseFloat(tickSize) - 2
-                        )}px`
+                        shapeTextSize
                     )
                     .text(function (segment) {
                         const value =
@@ -3331,193 +2000,18 @@ document.addEventListener('DOMContentLoaded', function () {
                             ? value
                             : "";
                     });
-                                    // Hide stack labels that do not fit their segment.
-                svg.selectAll(".stack-label").each(
-                    function (segment) {
-                        const label =
-                            d3.select(this);
 
-                        const value =
-                            segment[1] -
-                            segment[0];
+                // Filter out labels if the text size exceeds the inner shape segment dimensions
+                stackLabels.each(function (segment) {
+                    const label = d3.select(this);
+                    const segHeight = yScale(segment[0]) - yScale(segment[1]);
+                    const segWidth = xScale.bandwidth();
+                    const bbox = this.getBBox();
 
-                        if (value <= 0) {
-                            label.style(
-                                "display",
-                                "none"
-                            );
-
-                            return;
-                        }
-
-                        const boundingBox =
-                            this.getBBox();
-
-                        const textWidth =
-                            boundingBox.width;
-
-                        const textHeight =
-                            boundingBox.height ||
-                            parseFloat(
-                                label.style(
-                                    "font-size"
-                                )
-                            ) ||
-                            10;
-
-                        const segmentWidth =
-                            xScale.bandwidth();
-
-                        const segmentHeight =
-                            yScale(segment[0]) -
-                            yScale(segment[1]);
-
-                        if (
-                            segmentHeight <
-                                textHeight ||
-                            segmentWidth <
-                                textWidth
-                        ) {
-                            label.style(
-                                "display",
-                                "none"
-                            );
-                        }
+                    if (bbox.height > segHeight || bbox.width > segWidth) {
+                        label.style("display", "none");
                     }
-                );
-
-                // Remove overlapping labels within each stacked column.
-                const columnGroups = {};
-
-                svg.selectAll(".stack-label").each(
-                    function (segment) {
-                        const label =
-                            d3.select(this);
-
-                        if (
-                            label.style(
-                                "display"
-                            ) === "none"
-                        ) {
-                            return;
-                        }
-
-                        const category =
-                            segment.data[
-                                categoryKey
-                            ];
-
-                        if (
-                            !columnGroups[
-                                category
-                            ]
-                        ) {
-                            columnGroups[
-                                category
-                            ] = [];
-                        }
-
-                        columnGroups[
-                            category
-                        ].push({
-                            node: label,
-                            rect:
-                                this.getBoundingClientRect(),
-                            value:
-                                segment[1] -
-                                segment[0]
-                        });
-                    }
-                );
-
-                Object.keys(
-                    columnGroups
-                ).forEach(
-                    function (category) {
-                        const items =
-                            columnGroups[
-                                category
-                            ];
-
-                        items.sort(
-                            function (a, b) {
-                                return (
-                                    b.value -
-                                    a.value
-                                );
-                            }
-                        );
-
-                        const kept = [];
-
-                        items.forEach(
-                            function (item) {
-                                let overlaps =
-                                    false;
-
-                                for (
-                                    const existing
-                                    of kept
-                                ) {
-                                    const padding =
-                                        1;
-
-                                    const separated =
-                                        item.rect
-                                            .right +
-                                            padding <
-                                            existing
-                                                .rect
-                                                .left -
-                                                padding ||
-                                        item.rect
-                                            .left -
-                                            padding >
-                                            existing
-                                                .rect
-                                                .right +
-                                                padding ||
-                                        item.rect
-                                            .bottom +
-                                            padding <
-                                            existing
-                                                .rect
-                                                .top -
-                                                padding ||
-                                        item.rect
-                                            .top -
-                                            padding >
-                                            existing
-                                                .rect
-                                                .bottom +
-                                                padding;
-
-                                    if (
-                                        !separated
-                                    ) {
-                                        overlaps =
-                                            true;
-
-                                        break;
-                                    }
-                                }
-
-                                if (
-                                    overlaps
-                                ) {
-                                    item.node.style(
-                                        "display",
-                                        "none"
-                                    );
-                                } else {
-                                    kept.push(
-                                        item
-                                    );
-                                }
-                            }
-                        );
-                    }
-                );
+                });
 
                 // Total labels above stacked columns.
                 svg.selectAll(
@@ -3536,11 +2030,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             return (
                                 xScale(
                                     row[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 xScale.bandwidth() /
-                                    2
+                                2
                             );
                         }
                     )
@@ -3555,7 +2049,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     ) {
                                         return (
                                             row[
-                                                key
+                                            key
                                             ] ||
                                             0
                                         );
@@ -3598,7 +2092,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 ) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] ||
                                         0
                                     );
@@ -3656,7 +2150,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 ) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] ||
                                         0
                                     );
@@ -3670,7 +2164,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         .domain([
                             0,
                             maximumStack *
-                                1.1
+                            1.1
                         ])
                         .range([
                             0,
@@ -3721,6 +2215,25 @@ document.addEventListener('DOMContentLoaded', function () {
                         tickSize
                     );
 
+                // Measure y-axis label width and dynamically adjust layout if needed
+                let maxYLabelWidth = 0;
+                yAxisGroup.selectAll("text").each(function () {
+                    const bbox = this.getBBox();
+                    if (bbox.width > maxYLabelWidth) {
+                        maxYLabelWidth = bbox.width;
+                    }
+                });
+
+                const extraLeftMargin = Math.max(margin.left, maxYLabelWidth + 15);
+                const dynamicActiveWidth = chartWidth - extraLeftMargin - margin.right;
+
+                svg.attr("transform", `translate(${extraLeftMargin},${margin.top})`);
+                mainTitleText.attr("x", -extraLeftMargin);
+                subtitleText.attr("x", -extraLeftMargin);
+
+                xScale.range([0, dynamicActiveWidth]);
+                const currentActiveWidth = dynamicActiveWidth;
+
                 const stackedData =
                     d3.stack()
                         .keys(
@@ -3746,7 +2259,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 ) {
                                     return stackedColors[
                                         index %
-                                            stackedColors.length
+                                        stackedColors.length
                                     ];
                                 }
                             )
@@ -3806,134 +2319,55 @@ document.addEventListener('DOMContentLoaded', function () {
                     .exit()
                     .remove();
 
+                const hStackCornerRadius = 4;
+
                 segments
                     .enter()
-                    .append("rect")
-                    .merge(
-                        segments
-                    )
-                    .attr(
-                        "x",
-                        function (
-                            segment
-                        ) {
-                            return xScale(
-                                segment[0]
-                            );
-                        }
-                    )
-                    .attr(
-                        "y",
-                        function (
-                            segment
-                        ) {
-                            return yScale(
-                                segment
-                                    .data[
-                                    categoryKey
-                                ]
-                            );
-                        }
-                    )
-                    .attr(
-                        "width",
-                        function (
-                            segment
-                        ) {
-                            return (
-                                xScale(
-                                    segment[1]
-                                ) -
-                                xScale(
-                                    segment[0]
-                                )
-                            );
-                        }
-                    )
-                    .attr(
-                        "height",
-                        yScale.bandwidth()
-                    )
-                    .style(
-                        "cursor",
-                        "pointer"
-                    )
+                    .append("path")
+                    .merge(segments)
+                    .attr("d", function (segment) {
+                        const bx = xScale(segment[0]);
+                        const by = yScale(segment.data[categoryKey]);
+                        const bw = xScale(segment[1]) - xScale(segment[0]);
+                        const bh = yScale.bandwidth();
+                        return roundedRightRect(bx, by, bw, bh, hStackCornerRadius);
+                    })
+                    .style("cursor", "pointer")
                     .on(
                         "mouseover",
                         function () {
-                            d3.select(
-                                this
-                            ).attr(
-                                "opacity",
-                                0.85
-                            );
-
-                            tooltip.style(
-                                "visibility",
-                                "visible"
-                            );
+                            svg.selectAll(".stack-layer path").attr("opacity", 0.3);
+                            d3.select(this).attr("opacity", 1);
+                            tooltip.style("visibility", "visible");
                         }
                     )
                     .on(
                         "mousemove",
-                        function (
-                            event,
-                            segment
-                        ) {
+                        function (event, segment) {
                             const layerKey =
-                                d3.select(
-                                    this
-                                        .parentNode
-                                ).datum()
-                                    .key;
+                                d3.select(this.parentNode).datum().key;
 
                             const value =
-                                segment[1] -
-                                segment[0];
+                                segment[1] - segment[0];
+
+                            const desc = descriptionKey ? segment.data[descriptionKey] : null;
+                            const mainTxt = `<strong>${categoryKey}:</strong> ${segment.data[categoryKey]}<br><strong>${layerKey}:</strong> ${value}`;
 
                             tooltip
-                                .html(
-                                    `<strong>${categoryKey}:</strong> ${
-                                        segment
-                                            .data[
-                                            categoryKey
-                                        ]
-                                    }<br><strong>${layerKey}:</strong> ${value}`
-                                )
-                                .style(
-                                    "top",
-                                    `${
-                                        event.pageY +
-                                        10
-                                    }px`
-                                )
-                                .style(
-                                    "left",
-                                    `${
-                                        event.pageX +
-                                        10
-                                    }px`
-                                );
+                                .html(formatTooltipContent(mainTxt, desc))
+                                .style("top", `${event.pageY + 10}px`)
+                                .style("left", `${event.pageX + 10}px`);
                         }
                     )
                     .on(
                         "mouseout",
                         function () {
-                            d3.select(
-                                this
-                            ).attr(
-                                "opacity",
-                                1
-                            );
-
-                            tooltip.style(
-                                "visibility",
-                                "hidden"
-                            );
+                            svg.selectAll(".stack-layer path").attr("opacity", 1);
+                            tooltip.style("visibility", "hidden");
                         }
                     );
 
-                mergedLayers
+                const horizStackLabels = mergedLayers
                     .selectAll(
                         ".stack-label"
                     )
@@ -3956,9 +2390,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             segment
                         ) {
                             return (
-                                xScale(
-                                    segment[1]
-                                ) - 5
+                                xScale(segment[1]) - 8
                             );
                         }
                     )
@@ -3971,11 +2403,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                 yScale(
                                     segment
                                         .data[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 yScale.bandwidth() /
-                                    2
+                                2
                             );
                         }
                     )
@@ -3997,12 +2429,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     )
                     .style(
                         "font-size",
-                        `${Math.max(
-                            9,
-                            parseFloat(
-                                tickSize
-                            ) - 2
-                        )}px`
+                        shapeTextSize
                     )
                     .text(
                         function (
@@ -4019,218 +2446,17 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     );
 
-                // Hide labels that cannot fit inside the segment.
-                svg.selectAll(
-                    ".stack-label"
-                ).each(
-                    function (
-                        segment
-                    ) {
-                        const label =
-                            d3.select(
-                                this
-                            );
+                // Filter out labels if text size exceeds shape dimensions
+                horizStackLabels.each(function (segment) {
+                    const label = d3.select(this);
+                    const segWidth = xScale(segment[1]) - xScale(segment[0]);
+                    const segHeight = yScale.bandwidth();
+                    const bbox = this.getBBox();
 
-                        const value =
-                            segment[1] -
-                            segment[0];
-
-                        if (
-                            value <= 0
-                        ) {
-                            label.style(
-                                "display",
-                                "none"
-                            );
-
-                            return;
-                        }
-
-                        const boundingBox =
-                            this.getBBox();
-
-                        const textWidth =
-                            boundingBox.width;
-
-                        const textHeight =
-                            boundingBox.height ||
-                            parseFloat(
-                                label.style(
-                                    "font-size"
-                                )
-                            ) ||
-                            10;
-
-                        const segmentWidth =
-                            xScale(
-                                segment[1]
-                            ) -
-                            xScale(
-                                segment[0]
-                            );
-
-                        const segmentHeight =
-                            yScale.bandwidth();
-
-                        if (
-                            segmentWidth <
-                                textWidth ||
-                            segmentHeight <
-                                textHeight
-                        ) {
-                            label.style(
-                                "display",
-                                "none"
-                            );
-                        }
+                    if (bbox.width > segWidth || bbox.height > segHeight) {
+                        label.style("display", "none");
                     }
-                );
-
-                const rowGroups = {};
-
-                svg.selectAll(
-                    ".stack-label"
-                ).each(
-                    function (
-                        segment
-                    ) {
-                        const label =
-                            d3.select(
-                                this
-                            );
-
-                        if (
-                            label.style(
-                                "display"
-                            ) === "none"
-                        ) {
-                            return;
-                        }
-
-                        const category =
-                            segment.data[
-                                categoryKey
-                            ];
-
-                        if (
-                            !rowGroups[
-                                category
-                            ]
-                        ) {
-                            rowGroups[
-                                category
-                            ] = [];
-                        }
-
-                        rowGroups[
-                            category
-                        ].push({
-                            node: label,
-                            rect:
-                                this.getBoundingClientRect(),
-                            value:
-                                segment[1] -
-                                segment[0]
-                        });
-                    }
-                );
-
-                Object.keys(
-                    rowGroups
-                ).forEach(
-                    function (
-                        category
-                    ) {
-                        const items =
-                            rowGroups[
-                                category
-                            ];
-
-                        items.sort(
-                            function (
-                                a,
-                                b
-                            ) {
-                                return (
-                                    b.value -
-                                    a.value
-                                );
-                            }
-                        );
-
-                        const kept =
-                            [];
-
-                        items.forEach(
-                            function (
-                                item
-                            ) {
-                                let overlaps =
-                                    false;
-
-                                for (
-                                    const existing
-                                    of kept
-                                ) {
-                                    const padding =
-                                        1;
-
-                                    const separated =
-                                        item.rect
-                                            .right +
-                                            padding <
-                                            existing
-                                                .rect
-                                                .left -
-                                                padding ||
-                                        item.rect
-                                            .left -
-                                            padding >
-                                            existing
-                                                .rect
-                                                .right +
-                                                padding ||
-                                        item.rect
-                                            .bottom +
-                                            padding <
-                                            existing
-                                                .rect
-                                                .top -
-                                                padding ||
-                                        item.rect
-                                            .top -
-                                            padding >
-                                            existing
-                                                .rect
-                                                .bottom +
-                                                padding;
-
-                                    if (
-                                        !separated
-                                    ) {
-                                        overlaps =
-                                            true;
-
-                                        break;
-                                    }
-                                }
-
-                                if (
-                                    overlaps
-                                ) {
-                                    item.node.style(
-                                        "display",
-                                        "none"
-                                    );
-                                } else {
-                                    kept.push(
-                                        item
-                                    );
-                                }
-                            }
-                        );
-                    }
-                );
+                });
 
                 // Totals displayed to the right of each row.
                 svg.selectAll(
@@ -4254,7 +2480,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     ) {
                                         return (
                                             row[
-                                                key
+                                            key
                                             ] ||
                                             0
                                         );
@@ -4274,11 +2500,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             return (
                                 yScale(
                                     row[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 yScale.bandwidth() /
-                                    2
+                                2
                             );
                         }
                     )
@@ -4311,7 +2537,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 ) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] ||
                                         0
                                     );
@@ -4319,68 +2545,37 @@ document.addEventListener('DOMContentLoaded', function () {
                             );
                         }
                     );
-
-                if (showTable) {
-                    renderHorizontalBarLegendTable(
-                        data,
-                        categoryKey,
-                        activeFont,
-                        tickSize,
-                        borderThickness,
-                        yScale,
-                        margin.top
-                    );
-                }
             }
 
             // =====================================================
-            // LOGO
+            // LOGO (Always Logo with Text)
             // =====================================================
 
             logoRow
                 .selectAll("*")
                 .remove();
 
-            const selectedLogo =
-                logoPicker.property(
-                    "value"
-                );
-
             if (selectedLogo) {
                 const logoWidth =
                     Math.max(
-                        40,
+                        50,
                         Math.min(
-                            80,
+                            100,
                             containerWidth *
-                                0.12
+                            0.14
                         )
                     );
 
-                let logoHeight =
-                    logoWidth;
-
-                if (
-                    selectedLogo.includes(
-                        "with text"
-                    ) ||
-                    selectedLogo.includes(
-                        "all white"
-                    )
-                ) {
-                    logoHeight =
-                        logoWidth *
-                        0.35;
-                }
+                const logoHeight = logoWidth * 0.35;
 
                 logoRow
                     .append("img")
                     .attr(
                         "src",
                         themeJsUrl +
-                            encodeURIComponent(
-                                selectedLogo
-                            )
+                        encodeURIComponent(
+                            selectedLogo
+                        )
                     )
                     .attr(
                         "alt",
@@ -4403,65 +2598,13 @@ document.addEventListener('DOMContentLoaded', function () {
             updateChartWrapperLayout();
             scheduleResponsiveScale();
         }
-                // =========================================================
+
+        // =========================================================
         // CONTROL EVENT LISTENERS
         // =========================================================
 
-        const dynamicInputs = [
-            fontPicker,
-            typePicker,
-            logoPicker,
-            tableToggle
-        ];
-
-        dynamicInputs.forEach(function (inputSelector) {
-            inputSelector.on(
-                "input",
-                function () {
-                    if (
-                        currentData.length >
-                        0
-                    ) {
-                        renderChart(
-                            currentData
-                        );
-                    }
-                }
-            );
-
-            inputSelector.on(
-                "change",
-                function () {
-                    if (
-                        currentData.length >
-                        0
-                    ) {
-                        renderChart(
-                            currentData
-                        );
-                    }
-                }
-            );
-        });
-
         typePicker.on(
-            `change.table-visibility-${uid}`,
-            function () {
-                updateTableControlsVisibility();
-
-                if (
-                    currentData.length >
-                    0
-                ) {
-                    renderChart(
-                        currentData
-                    );
-                }
-            }
-        );
-
-        tableToggle.on(
-            `change.table-toggle-${uid}`,
+            "change",
             function () {
                 if (
                     currentData.length >
@@ -4474,8 +2617,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         );
 
-        // Each chart instance responds independently
-        // while sharing the browser resize event.
         function handleWindowResize() {
             applyResponsiveScale();
         }
@@ -4532,10 +2673,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 )
                 .style(
                     "font-family",
-                    fontPicker.property(
-                        "value"
-                    ) ||
-                        "sans-serif"
+                    activeFont
                 )
                 .style(
                     "font-size",
@@ -4609,30 +2747,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 return "";
             }
 
-            // Remove commas, currency symbols and other
-            // non-numeric characters before checking.
-            const numericCandidate =
-                trimmedValue.replace(
-                    /[^0-9.\-]/g,
-                    ""
-                );
+            if (!isNaN(Number(trimmedValue))) {
+                return Number(trimmedValue);
+            }
 
-            if (
-                numericCandidate !==
-                    "" &&
-                numericCandidate !==
-                    "-" &&
-                numericCandidate !==
-                    "." &&
-                !isNaN(
-                    Number(
-                        numericCandidate
-                    )
-                )
-            ) {
-                return Number(
-                    numericCandidate
-                );
+            const cleanedNumeric = trimmedValue.replace(/,/g, "");
+            if (!isNaN(Number(cleanedNumeric))) {
+                return Number(cleanedNumeric);
             }
 
             return trimmedValue;
@@ -4655,13 +2776,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         function (cell) {
                             return (
                                 cell !==
-                                    null &&
+                                null &&
                                 cell !==
-                                    undefined &&
+                                undefined &&
                                 String(
                                     cell
                                 ).trim() !==
-                                    ""
+                                ""
                             );
                         }
                     );
@@ -4676,7 +2797,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (
                     !rawCsvText ||
                     rawCsvText.trim() ===
-                        ""
+                    ""
                 ) {
                     throw new Error(
                         "CSV data is empty."
@@ -4698,7 +2819,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     const rawData =
                                         removeEmptyRows(
                                             results.data ||
-                                                []
+                                            []
                                         );
 
                                     if (
@@ -4713,7 +2834,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                     const firstCell =
                                         String(
                                             rawData[0][0] ||
-                                                ""
+                                            ""
                                         )
                                             .trim()
                                             .toLowerCase();
@@ -4721,12 +2842,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                     let parsedData =
                                         [];
 
-                                    // Custom CSV structure:
-                                    //
-                                    // Title,My Chart Title
-                                    // Subtitle,My Subtitle
-                                    // Category,Value,Description
-                                    // Item 1,10,Description here
                                     if (
                                         firstCell ===
                                         "title"
@@ -4734,7 +2849,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         currentTitle =
                                             String(
                                                 rawData[0][1] ||
-                                                    ""
+                                                ""
                                             ).trim();
 
                                         let headerRowIndex =
@@ -4744,16 +2859,16 @@ document.addEventListener('DOMContentLoaded', function () {
                                             rawData[1] &&
                                             String(
                                                 rawData[1][0] ||
-                                                    ""
+                                                ""
                                             )
                                                 .trim()
                                                 .toLowerCase() ===
-                                                "subtitle"
+                                            "subtitle"
                                         ) {
                                             currentSubtitle =
                                                 String(
                                                     rawData[1][1] ||
-                                                        ""
+                                                    ""
                                                 ).trim();
 
                                             headerRowIndex =
@@ -4765,7 +2880,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                                         if (
                                             !rawData[
-                                                headerRowIndex
+                                            headerRowIndex
                                             ]
                                         ) {
                                             throw new Error(
@@ -4784,14 +2899,13 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     const cleanedKey =
                                                         String(
                                                             key ||
-                                                                ""
+                                                            ""
                                                         ).trim();
 
                                                     return (
                                                         cleanedKey ||
-                                                        `Column ${
-                                                            index +
-                                                            1
+                                                        `Column ${index +
+                                                        1
                                                         }`
                                                     );
                                                 }
@@ -4807,7 +2921,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         ) {
                                             const sourceRow =
                                                 rawData[
-                                                    rowIndex
+                                                rowIndex
                                                 ];
 
                                             if (
@@ -4829,7 +2943,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     ] =
                                                         parseCellValue(
                                                             sourceRow[
-                                                                columnIndex
+                                                            columnIndex
                                                             ]
                                                         );
                                                 }
@@ -4840,11 +2954,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                             );
                                         }
                                     } else {
-                                        // Standard CSV:
-                                        //
-                                        // Category,Value,Description
-                                        // Item 1,10,Description here
-
                                         currentTitle =
                                             "";
 
@@ -4860,14 +2969,13 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     const cleanedKey =
                                                         String(
                                                             key ||
-                                                                ""
+                                                            ""
                                                         ).trim();
 
                                                     return (
                                                         cleanedKey ||
-                                                        `Column ${
-                                                            index +
-                                                            1
+                                                        `Column ${index +
+                                                        1
                                                         }`
                                                     );
                                                 }
@@ -4882,7 +2990,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         ) {
                                             const sourceRow =
                                                 rawData[
-                                                    rowIndex
+                                                rowIndex
                                                 ];
 
                                             if (
@@ -4904,7 +3012,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     ] =
                                                         parseCellValue(
                                                             sourceRow[
-                                                                columnIndex
+                                                            columnIndex
                                                             ]
                                                         );
                                                 }
@@ -4934,19 +3042,19 @@ document.addEventListener('DOMContentLoaded', function () {
                                                     return (
                                                         firstKey &&
                                                         row[
-                                                            firstKey
+                                                        firstKey
                                                         ] !==
-                                                            null &&
+                                                        null &&
                                                         row[
-                                                            firstKey
+                                                        firstKey
                                                         ] !==
-                                                            undefined &&
+                                                        undefined &&
                                                         String(
                                                             row[
-                                                                firstKey
+                                                            firstKey
                                                             ]
                                                         ).trim() !==
-                                                            ""
+                                                        ""
                                                     );
                                                 }
                                             );
@@ -4967,7 +3075,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                         parsedData
                                     );
                                 } catch (
-                                    parsingError
+                                parsingError
                                 ) {
                                     console.error(
                                         `Parola chart ${uid}:`,
@@ -4996,7 +3104,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 );
             } catch (
-                csvError
+            csvError
             ) {
                 console.error(
                     `Parola chart ${uid}:`,
@@ -5010,170 +3118,159 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // =========================================================
-// CSV FILE INPUT
-// =========================================================
+        // CSV FILE INPUT
+        // =========================================================
 
-let csvHasLoaded = false;
+        let csvHasLoaded = false;
 
-fileInput.on("change", function (event) {
-    const inputElement = event.currentTarget || event.target;
-    const file = inputElement.files && inputElement.files[0];
+        fileInput.on("change", function (event) {
+            const inputElement = event.currentTarget || event.target;
+            const file = inputElement.files && inputElement.files[0];
 
-    if (!file) {
-        return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = function (loadEvent) {
-        csvHasLoaded = true;
-
-        parseCSVAndRender(
-            loadEvent.target.result
-        );
-    };
-
-    reader.onerror = function (error) {
-        console.error(
-            `Parola chart ${uid}: Unable to read CSV file.`,
-            error
-        );
-
-        displayErrorState(
-            "Tracking metrics update pending"
-        );
-    };
-
-    reader.readAsText(file);
-});
-
-// =========================================================
-// BACKEND CSV FALLBACK
-// =========================================================
-
-const backendCsvUrl =
-    canvas.attr("data-csv-url") ||
-    canvas.attr("data-source-file") ||
-    "";
-
-const backendCsvFilename =
-    canvas.attr("data-csv-filename") ||
-    "chart.csv";
-
-/**
- * The functions.php script normally places the backend CSV into
- * the generated file input. This fallback performs the same process
- * if the PHP bridge has not assigned the file yet.
- */
-function loadBackendCsv() {
-    if (
-        csvHasLoaded ||
-        !backendCsvUrl
-    ) {
-        return;
-    }
-
-    fetch(backendCsvUrl, {
-        credentials: "same-origin",
-        cache: "no-store"
-    })
-        .then(function (response) {
-            if (!response.ok) {
-                throw new Error(
-                    `CSV request failed with status ${response.status}.`
-                );
-            }
-
-            return response.blob();
-        })
-        .then(function (blob) {
-            if (csvHasLoaded) {
+            if (!file) {
                 return;
             }
 
-            const csvFile = new File(
-                [blob],
-                backendCsvFilename,
-                {
-                    type:
-                        blob.type ||
-                        "text/csv"
-                }
-            );
+            const reader = new FileReader();
 
-            // Use the same input path as a manual or PHP-injected upload.
-            if (
-                typeof DataTransfer !==
-                "undefined"
-            ) {
-                const transfer =
-                    new DataTransfer();
+            reader.onload = function (loadEvent) {
+                csvHasLoaded = true;
 
-                transfer.items.add(
-                    csvFile
+                parseCSVAndRender(
+                    loadEvent.target.result
+                );
+            };
+
+            reader.onerror = function (error) {
+                console.error(
+                    `Parola chart ${uid}: Unable to read CSV file.`,
+                    error
                 );
 
-                const inputNode =
-                    fileInput.node();
-
-                inputNode.files =
-                    transfer.files;
-
-                inputNode.dispatchEvent(
-                    new Event(
-                        "change",
-                        {
-                            bubbles: true
-                        }
-                    )
-                );
-
-                return;
-            }
-
-            // Fallback for browsers where DataTransfer cannot be created.
-            const reader =
-                new FileReader();
-
-            reader.onload =
-                function (
-                    loadEvent
-                ) {
-                    csvHasLoaded =
-                        true;
-
-                    parseCSVAndRender(
-                        loadEvent
-                            .target
-                            .result
-                    );
-                };
-
-            reader.readAsText(
-                csvFile
-            );
-        })
-        .catch(function (error) {
-            console.error(
-                `Parola chart ${uid}: Backend CSV could not be loaded.`,
-                error
-            );
-
-            if (!csvHasLoaded) {
                 displayErrorState(
                     "Tracking metrics update pending"
                 );
-            }
-        });
-}
+            };
 
-/*
- * Allow the functions.php bridge to assign the CSV first.
- * The fallback only runs if nothing has loaded afterward.
- */
-window.setTimeout(
-    loadBackendCsv,
-    500
-);
+            reader.readAsText(file);
+        });
+
+        // =========================================================
+        // BACKEND CSV FALLBACK
+        // =========================================================
+
+        const backendCsvUrl =
+            canvas.attr("data-csv-url") ||
+            canvas.attr("data-source-file") ||
+            "";
+
+        const backendCsvFilename =
+            canvas.attr("data-csv-filename") ||
+            "chart.csv";
+
+        function loadBackendCsv() {
+            if (
+                csvHasLoaded ||
+                !backendCsvUrl
+            ) {
+                return;
+            }
+
+            fetch(backendCsvUrl, {
+                credentials: "same-origin",
+                cache: "no-store"
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error(
+                            `CSV request failed with status ${response.status}.`
+                        );
+                    }
+
+                    return response.blob();
+                })
+                .then(function (blob) {
+                    if (csvHasLoaded) {
+                        return;
+                    }
+
+                    const csvFile = new File(
+                        [blob],
+                        backendCsvFilename,
+                        {
+                            type:
+                                blob.type ||
+                                "text/csv"
+                        }
+                    );
+
+                    if (
+                        typeof DataTransfer !==
+                        "undefined"
+                    ) {
+                        const transfer =
+                            new DataTransfer();
+
+                        transfer.items.add(
+                            csvFile
+                        );
+
+                        const inputNode =
+                            fileInput.node();
+
+                        inputNode.files =
+                            transfer.files;
+
+                        inputNode.dispatchEvent(
+                            new Event(
+                                "change",
+                                {
+                                    bubbles: true
+                                }
+                            )
+                        );
+
+                        return;
+                    }
+
+                    const reader =
+                        new FileReader();
+
+                    reader.onload =
+                        function (
+                            loadEvent
+                        ) {
+                            csvHasLoaded =
+                                true;
+
+                            parseCSVAndRender(
+                                loadEvent
+                                    .target
+                                    .result
+                            );
+                        };
+
+                    reader.readAsText(
+                        csvFile
+                    );
+                })
+                .catch(function (error) {
+                    console.error(
+                        `Parola chart ${uid}: Backend CSV could not be loaded.`,
+                        error
+                    );
+
+                    if (!csvHasLoaded) {
+                        displayErrorState(
+                            "Tracking metrics update pending"
+                        );
+                    }
+                });
+        }
+
+        window.setTimeout(
+            loadBackendCsv,
+            500
+        );
     }
 });
