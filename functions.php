@@ -347,6 +347,10 @@ function custom_d3_register_block() {
 					'type'    => 'string',
 					'default' => '',
 				),
+				'chartType'   => array(
+					'type'    => 'string',
+					'default' => 'bar',
+				),
 			),
 			'supports'        => array(
 				'multiple' => true,
@@ -372,6 +376,23 @@ function custom_d3_render_block( $attributes ) {
 	$csv_id       = isset( $attributes['csvId'] ) ? absint( $attributes['csvId'] ) : 0;
 	$csv_filename = isset( $attributes['csvFilename'] ) ? sanitize_file_name( $attributes['csvFilename'] ) : '';
 
+	$allowed_chart_types = array(
+		'bar',
+		'line',
+		'pie',
+		'stacked-bar',
+		'horizontal-bar',
+		'horizontal-stacked-bar',
+	);
+
+	$chart_type = isset( $attributes['chartType'] )
+		? sanitize_key( $attributes['chartType'] )
+		: 'bar';
+
+	if ( ! in_array( $chart_type, $allowed_chart_types, true ) ) {
+		$chart_type = 'bar';
+	}
+
 	// Never trust the stored URL blindly — re-resolve it from the
 	// attachment ID every time the block renders.
 	$csv_url = '';
@@ -394,11 +415,12 @@ function custom_d3_render_block( $attributes ) {
 	}
 
 	return sprintf(
-		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s"></div></div>',
+		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" chart-type="%5$s"></div></div>',
 		$wrapper_attributes,
 		esc_attr( $canvas_id ),
 		esc_url( $csv_url ),
-		esc_attr( $csv_filename )
+		esc_attr( $csv_filename ),
+		esc_attr( $chart_type )
 	);
 }
 
@@ -436,6 +458,7 @@ function custom_d3_get_editor_js() {
 	var MediaUploadCheck = blockEditor.MediaUploadCheck;
 	var Button           = components.Button;
 	var Notice           = components.Notice;
+	var SelectControl    = components.SelectControl;
 	var __               = i18n.__;
 
 	registerBlockType( 'custom-d3/chart-block', {
@@ -458,6 +481,10 @@ function custom_d3_get_editor_js() {
 			csvFilename: {
 				type: 'string',
 				default: ''
+			},
+			chartType: {
+				type: 'string',
+				default: 'bar'
 			}
 		},
 
@@ -535,6 +562,27 @@ function custom_d3_get_editor_js() {
 					}, __( 'Remove CSV', 'custom-d3' ) )
 				);
 			}
+
+			children.push(
+				el( SelectControl, {
+					key: 'chart-type',
+					label: __( 'Chart Type', 'custom-d3' ),
+					value: attributes.chartType || 'bar',
+					options: [
+						{ label: __( 'Bar', 'custom-d3' ), value: 'bar' },
+						{ label: __( 'Line', 'custom-d3' ), value: 'line' },
+						{ label: __( 'Pie Chart', 'custom-d3' ), value: 'pie' },
+						{ label: __( 'Stacked Bar Chart', 'custom-d3' ), value: 'stacked-bar' },
+						{ label: __( 'Horizontal Bar Chart', 'custom-d3' ), value: 'horizontal-bar' },
+						{ label: __( 'Horizontal Stacked Bar Chart', 'custom-d3' ), value: 'horizontal-stacked-bar' }
+					],
+					onChange: function ( value ) {
+						setAttributes( {
+							chartType: value
+						} );
+					}
+				} )
+			);
 
 			return el( 'div', blockProps,
 				el( 'div', { className: 'custom-d3-editor-notice-wrap' }, children )
