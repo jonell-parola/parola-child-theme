@@ -723,15 +723,6 @@ add_action( 'wp_footer', 'custom_d3_hide_controls_for_guests_js', 100 );
 
 function custom_d3_hide_controls_for_guests_js() {
 
-	// Do not run in the WordPress admin area.
-	if ( is_admin() ) {
-		return;
-	}
-
-	// Do not output the hiding script for logged-in users.
-	if ( is_user_logged_in() ) {
-		return;
-	}
 	?>
 	<script>
 	(function () {
