@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.57 - "Fixed Heatmaps"
+ * 1.0.59 - "Heatmap changed to percentage values"
  */
 document.addEventListener('DOMContentLoaded', function () {
 	console.log("🚀 Parola Engine: Visual scripting pipeline initializing...");
