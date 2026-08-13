@@ -268,7 +268,9 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.57', // Multi-instance + robust CSV parsing (no NaN bars)
+        '1.0.58', // Multi-instance + robust CSV parsing (no NaN bars)
+        // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58"
+		// STABLE VERSIONS: "1.0.51", "1.0.55"
         true
     );
 }
