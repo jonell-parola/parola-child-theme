@@ -721,7 +721,7 @@ function custom_d3_print_frontend_script() {
  *    every logged-out visitor.
  * ========================================================================= */
 
-add_action( 'wp_footer', 'custom_d3_hide_controls_for_guests_js', 100 );
+// add_action( 'wp_footer', 'custom_d3_hide_controls_for_guests_js', 100 );
 
 function custom_d3_hide_controls_for_guests_js() {
 
