@@ -3372,10 +3372,10 @@ document.addEventListener('DOMContentLoaded', function () {
 							.style("border", "none")
 							.style("border-bottom", rowBorderBottom);
 
-						// Company Cell Tooltip Popup hover showing value
+						// Company Cell Tooltip Popup hover showing value as percentage
 						companyCell
 							.on("mouseover", function (event) {
-								const formattedVal = cellVal.toLocaleString(undefined, { maximumFractionDigits: 6 });
+								const formattedVal = cellVal.toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
 								const mainContent = `<div style="font-weight:bold; font-size:13px;">${cpcLabel} — ${colKey}</div>
                                     <div style="margin-top:2px;">Value: <strong>${formattedVal}</strong></div>`;
 								tooltip
@@ -3426,7 +3426,8 @@ document.addEventListener('DOMContentLoaded', function () {
 				});
 
 				// Gradient Bar Legend below the table
-				const maxPctText = `${Math.round(maxCompanyVal * 100)}%`;
+				const maxPctVal = maxCompanyVal <= 1 && maxCompanyVal > 0 ? maxCompanyVal * 100 : maxCompanyVal;
+				const maxPctText = `${Number(maxPctVal.toFixed(2))}%`;
 				const minPctText = "0%";
 
 				const legendWrapper = heatmapWrapper.append("div")
@@ -3667,8 +3668,8 @@ document.addEventListener('DOMContentLoaded', function () {
 				return Number(trimmedValue);
 			}
 
-			const cleanedNumeric = trimmedValue.replace(/,/g, "");
-			if (!isNaN(Number(cleanedNumeric))) {
+			const cleanedNumeric = trimmedValue.replace(/,/g, "").replace(/%/g, "");
+			if (!isNaN(Number(cleanedNumeric)) && cleanedNumeric !== "") {
 				return Number(cleanedNumeric);
 			}
 
