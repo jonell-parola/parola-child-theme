@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.59 - "Heatmap changed to percentage values"
+ * 1.0.60 - "Fixed Issues"
  */
 document.addEventListener('DOMContentLoaded', function () {
 	console.log("🚀 Parola Engine: Visual scripting pipeline initializing...");
@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		for (const script of scripts) {
 			if (
 				script.src &&
-				script.src.includes("parola-charts.js")
+				(script.src.includes("parola-charts") || script.src.includes("parola"))
 			) {
 				themeJsUrl = script.src.substring(
 					0,
@@ -208,6 +208,8 @@ document.addEventListener('DOMContentLoaded', function () {
 			bottom: 60,
 			left: 100
 		};
+
+		d3.select(`body > .parola-chart-tooltip-${uid}`).remove();
 
 		const tooltip = d3
 			.select("body")
@@ -428,33 +430,29 @@ document.addEventListener('DOMContentLoaded', function () {
 				.style("margin-bottom", null);
 
 			requestAnimationFrame(function () {
-				requestAnimationFrame(function () {
-					requestAnimationFrame(function () {
-						if (!chartWrapper.node()) {
-							return;
-						}
+				if (!chartWrapper.node()) {
+					return;
+				}
 
-						const svgWidth =
-							parseFloat(
-								svgOuter.attr("width")
-							) || 0;
+				const svgWidth =
+					parseFloat(
+						svgOuter.attr("width")
+					) || 0;
 
-						naturalWrapperWidth = svgWidth;
+				naturalWrapperWidth = svgWidth;
 
-						naturalWrapperHeight =
-							chartWrapper
-								.node()
-								.getBoundingClientRect()
-								.height;
+				naturalWrapperHeight =
+					chartWrapper
+						.node()
+						.getBoundingClientRect()
+						.height;
 
-						if (
-							naturalWrapperWidth > 0 &&
-							naturalWrapperHeight > 0
-						) {
-							applyResponsiveScale();
-						}
-					});
-				});
+				if (
+					naturalWrapperWidth > 0 &&
+					naturalWrapperHeight > 0
+				) {
+					applyResponsiveScale();
+				}
 			});
 		}
 
@@ -769,25 +767,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			);
 		}
 
-		// Helper function to check if label fits inside SVG bounding box
-		function checkAndFilterOverlappingLabels(labelsSelection) {
-			labelsSelection.each(function () {
-				const label = d3.select(this);
-				if (label.style("display") === "none") return;
 
-				const boundingBox = this.getBBox();
-				const parentBox = this.parentNode ? this.parentNode.getBBox() : null;
-
-				if (parentBox) {
-					if (
-						boundingBox.width > parentBox.width ||
-						boundingBox.height > parentBox.height
-					) {
-						label.style("display", "none");
-					}
-				}
-			});
-		}
 
 		// Helper: draw a rect with rounded top-left and top-right corners only (for vertical bars)
 		function roundedTopRect(x, y, w, h, r) {
@@ -825,6 +805,9 @@ document.addEventListener('DOMContentLoaded', function () {
 		// =========================================================
 
 		function renderChart(data) {
+			d3.select("body").on(`click.multi-line-${uid}`, null);
+			d3.select("body").on(`click.stacked-area-${uid}`, null);
+
 			if (!data || data.length === 0) {
 				return;
 			}
@@ -1078,7 +1061,7 @@ document.addEventListener('DOMContentLoaded', function () {
 					"none"
 				);
 
-				const outerMargin = 35;
+				const outerMargin = 60;
 				const radiusX = Math.max(20, activeWidth / 2 - outerMargin);
 				const radiusY = Math.max(20, activeHeight / 2 - outerMargin);
 				const radius = Math.min(radiusX, radiusY);
@@ -1416,71 +1399,98 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 
 			// =====================================================
-			// LINE CHART
+			// LINE CHART (Redesigned to match Multiple Line Chart)
 			// =====================================================
 
 			else if (activeType === "line") {
 				xAxisGroup.style("display", null);
 				yAxisGroup.style("display", null);
 
+				const PIE_COLORS = [
+					"#126274",
+					"#23a1b5",
+					"#1e8b9f",
+					"#44b2bf",
+					"#30c8e3",
+					"#97ffff",
+					"#28b9b3",
+					"#d4edbc",
+					"#d2b50b",
+					"#eee8aa"
+				];
+
+				const categories = data.map(function (row) {
+					return String(row[categoryKey]);
+				});
+
 				const xScale = d3
-					.scaleBand()
-					.domain(
-						data.map(function (row) {
-							return row[categoryKey];
-						})
-					)
+					.scalePoint()
+					.domain(categories)
 					.range([0, activeWidth])
-					.padding(0.3);
+					.padding(0.1);
 
 				const maximumValue =
 					d3.max(data, function (row) {
 						return row[valueKeys[0]] || 0;
 					}) || 0;
+				const maxVal = maximumValue === 0 ? 10 : maximumValue;
 
 				const yScale = d3
 					.scaleLinear()
-					.domain([
-						0,
-						maximumValue > 0
-							? maximumValue * 1.1
-							: 1
-					])
+					.domain([0, maxVal * 1.08])
+					.nice()
 					.range([activeHeight, 0]);
 
-				xAxisGroup
-					.call(d3.axisBottom(xScale))
-					.selectAll("text")
-					.style("font-family", activeFont)
-					.style("font-size", tickSize);
+				// Y-axis with horizontal light gray gridlines, hidden vertical Y axis line
+				const yAxis = d3
+					.axisLeft(yScale)
+					.ticks(6)
+					.tickSize(-activeWidth);
 
 				yAxisGroup
-					.call(d3.axisLeft(yScale))
-					.selectAll("text")
-					.style("font-family", activeFont)
-					.style("font-size", tickSize);
+					.call(yAxis)
+					.call(function (g) {
+						g.select(".domain").remove();
+						g.selectAll(".tick line")
+							.attr("stroke", "#e5e5e5")
+							.attr("stroke-dasharray", null);
+						g.selectAll(".tick text")
+							.style("font-family", activeFont)
+							.style("font-size", tickSize)
+							.style("fill", "#545454");
+					});
+
+				// X-axis with horizontal line, no vertical gridlines
+				const xAxis = d3.axisBottom(xScale);
+
+				xAxisGroup
+					.call(xAxis)
+					.call(function (g) {
+						g.select(".domain")
+							.attr("stroke", "#ccc")
+							.attr("stroke-width", 1);
+						g.selectAll(".tick line").remove();
+						g.selectAll(".tick text")
+							.style("font-family", activeFont)
+							.style("font-size", tickSize)
+							.style("fill", "#545454");
+					});
 
 				const lineGenerator = d3
 					.line()
-					.x(function (row) {
-						return (
-							xScale(row[categoryKey]) +
-							xScale.bandwidth() / 2
-						);
+					.x(function (d) {
+						return xScale(String(d[categoryKey]));
 					})
-					.y(function (row) {
-						return yScale(
-							row[valueKeys[0]] || 0
-						);
-					});
+					.y(function (d) {
+						return yScale(d[valueKeys[0]] || 0);
+					})
+					.curve(d3.curveLinear);
 
 				const linePath = svg
 					.selectAll(".chart-line")
 					.data([data]);
 
-				linePath
-					.exit()
-					.remove();
+				linePath.exit().remove();
 
 				linePath
 					.enter()
@@ -1489,73 +1499,86 @@ document.addEventListener('DOMContentLoaded', function () {
 					.merge(linePath)
 					.attr("d", lineGenerator)
 					.attr("fill", "none")
-					.attr("stroke", "#1ea0af")
-					.attr("stroke-width", 3);
+					.attr("stroke", PIE_COLORS[0])
+					.attr("stroke-width", 2.5);
 
-				const dots = svg
-					.selectAll(".chart-dot")
-					.data(data);
+				// Vertical hover line overlay for X-axis data inspection
+				const hoverOverlayGroup = svg
+					.append("g")
+					.attr("class", "hover-overlay-group");
 
-				dots.exit().remove();
+				const verticalHoverLine = hoverOverlayGroup
+					.append("line")
+					.attr("y1", 0)
+					.attr("y2", activeHeight)
+					.attr("stroke", "#888")
+					.attr("stroke-width", 1.5)
+					.attr("stroke-dasharray", "4 4")
+					.style("pointer-events", "none")
+					.style("visibility", "hidden");
 
-				dots
-					.enter()
+				const hoverDot = hoverOverlayGroup
 					.append("circle")
-					.attr("class", "chart-dot")
-					.merge(dots)
-					.attr("cx", function (row) {
-						return (
-							xScale(row[categoryKey]) +
-							xScale.bandwidth() / 2
-						);
-					})
-					.attr("cy", function (row) {
-						return yScale(
-							row[valueKeys[0]] || 0
-						);
-					})
-					.attr("r", 6)
-					.attr("fill", "#1ea0af")
-					.style("cursor", "pointer")
-					.on("mouseover", function () {
-						d3.select(this)
-							.attr(
-								"fill",
-								d3.rgb("#1ea0af").darker(0.5)
-							)
-							.attr("r", 8);
+					.attr("class", "hover-dot")
+					.attr("r", 4.5)
+					.attr("fill", PIE_COLORS[0])
+					.attr("stroke", "#fff")
+					.attr("stroke-width", 1.5)
+					.style("pointer-events", "none")
+					.style("visibility", "hidden");
 
-						tooltip.style(
-							"visibility",
-							"visible"
-						);
+				const overlayRect = hoverOverlayGroup
+					.append("rect")
+					.attr("width", activeWidth)
+					.attr("height", activeHeight)
+					.attr("fill", "transparent")
+					.style("cursor", "crosshair");
+
+				overlayRect
+					.on("mousemove", function (event) {
+						const [mouseX] = d3.pointer(event, this);
+						let closestRow = data[0];
+						let minDistance = Infinity;
+
+						data.forEach(function (row) {
+							const cx = xScale(String(row[categoryKey]));
+							const dist = Math.abs(mouseX - cx);
+							if (dist < minDistance) {
+								minDistance = dist;
+								closestRow = row;
+							}
+						});
+
+						const cx = xScale(String(closestRow[categoryKey]));
+						const cy = yScale(closestRow[valueKeys[0]] || 0);
+
+						verticalHoverLine
+							.attr("x1", cx)
+							.attr("x2", cx)
+							.style("visibility", "visible");
+
+						hoverDot
+							.attr("cx", cx)
+							.attr("cy", cy)
+							.style("visibility", "visible");
+
+						const val = closestRow[valueKeys[0]] !== undefined ? closestRow[valueKeys[0]] : 0;
+						const desc = descriptionKey ? closestRow[descriptionKey] : null;
+						const mainTxt = `<div style="font-weight:bold; margin-bottom:4px;">${closestRow[categoryKey]}</div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <strong>${valueKeys[0]}:</strong> ${val}
+                            </div>`;
+
+						tooltip
+							.html(formatTooltipContent(mainTxt, desc))
+							.style("visibility", "visible")
+							.style("top", `${event.pageY + 10}px`)
+							.style("left", `${event.pageX + 10}px`);
 					})
-					.on(
-						"mousemove",
-						function (event, row) {
-							const desc = descriptionKey ? row[descriptionKey] : null;
-							const mainTxt = `<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style(
-									"top",
-									`${event.pageY + 10}px`
-								)
-								.style(
-									"left",
-									`${event.pageX + 10}px`
-								);
-						}
-					)
 					.on("mouseout", function () {
-						d3.select(this)
-							.attr("fill", "#1ea0af")
-							.attr("r", 6);
-
-						tooltip.style(
-							"visibility",
-							"hidden"
-						);
+						verticalHoverLine.style("visibility", "hidden");
+						hoverDot.style("visibility", "hidden");
+						tooltip.style("visibility", "hidden");
 					});
 			}
 
@@ -1825,7 +1848,7 @@ document.addEventListener('DOMContentLoaded', function () {
 					.each(function () {
 						// Hide label if it spills beyond the chart right edge
 						const bbox = this.getBBox();
-						if (bbox.x + bbox.width > activeWidth) {
+						if (bbox.x + bbox.width > dynamicActiveWidth) {
 							d3.select(this).style("display", "none");
 						}
 					});
@@ -1957,7 +1980,7 @@ document.addEventListener('DOMContentLoaded', function () {
 						const by = yScale(segment[1]);
 						const bw = xScale.bandwidth();
 						const bh = yScale(segment[0]) - yScale(segment[1]);
-						// Only round top corners for the topmost segment (segment[0] == 0 means bottom-most stack, skip; round always for visual consistency)
+						if (bh <= 0 || bw <= 0) return "";
 						return roundedTopRect(bx, by, bw, bh, stackCornerRadius);
 					})
 					.style("cursor", "pointer")
@@ -2583,7 +2606,13 @@ document.addEventListener('DOMContentLoaded', function () {
 								}
 							);
 						}
-					);
+					)
+					.each(function () {
+						const bbox = this.getBBox();
+						if (bbox.x + bbox.width > dynamicActiveWidth) {
+							d3.select(this).style("display", "none");
+						}
+					});
 			}
 
 			// =====================================================
@@ -3375,7 +3404,8 @@ document.addEventListener('DOMContentLoaded', function () {
 						// Company Cell Tooltip Popup hover showing value as percentage
 						companyCell
 							.on("mouseover", function (event) {
-								const formattedVal = cellVal.toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
+								const displayVal = (cellVal <= 1 && cellVal > 0) ? cellVal * 100 : cellVal;
+								const formattedVal = displayVal.toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
 								const mainContent = `<div style="font-weight:bold; font-size:13px;">${cpcLabel} — ${colKey}</div>
                                     <div style="margin-top:2px;">Value: <strong>${formattedVal}</strong></div>`;
 								tooltip
@@ -3534,8 +3564,12 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		);
 
+		let resizeTimer = null;
 		function handleWindowResize() {
-			applyResponsiveScale();
+			if (resizeTimer) clearTimeout(resizeTimer);
+			resizeTimer = setTimeout(function () {
+				applyResponsiveScale();
+			}, 100);
 		}
 
 		window.addEventListener(
@@ -3967,33 +4001,16 @@ document.addEventListener('DOMContentLoaded', function () {
 										parsedData.length >
 										0
 									) {
-										const firstKey =
-											Object.keys(
-												parsedData[0]
-											)[0];
-
 										parsedData =
 											parsedData.filter(
 												function (
 													row
 												) {
-													return (
-														firstKey &&
-														row[
-														firstKey
-														] !==
-														null &&
-														row[
-														firstKey
-														] !==
-														undefined &&
-														String(
-															row[
-															firstKey
-															]
-														).trim() !==
-														""
-													);
+													const rowKeys = Object.keys(row);
+													return rowKeys.some(function (k) {
+														const val = row[k];
+														return val !== null && val !== undefined && String(val).trim() !== "";
+													});
 												}
 											);
 									}
