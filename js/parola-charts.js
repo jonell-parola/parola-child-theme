@@ -3,21 +3,80 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.60 - "Fixed Issues"
+ * 1.0.61 - "Fixed Issues"
  */
-document.addEventListener('DOMContentLoaded', function () {
-    console.log("🚀 Parola Engine: Visual scripting pipeline initializing...");
+(function () {
 
-    const canvases = document.querySelectorAll(".d3-test-canvas");
+    console.log(
+        "🚀 Parola Engine: Visual scripting pipeline initializing..."
+    );
 
-    if (!canvases.length) {
-        console.warn("⚠️ No .d3-test-canvas containers found on this page.");
-        return;
+    let parolaInstanceCounter = 0;
+
+
+    // =========================================================
+    // INITIALIZE CHARTS
+    // Supports frontend + dynamically inserted Gutenberg previews
+    // =========================================================
+
+    function initializeParolaCharts(rootNode) {
+
+        const root =
+            rootNode || document;
+
+        const canvases = [];
+
+
+        // Root itself may be a chart.
+        if (
+            root.nodeType === 1 &&
+            root.matches &&
+            root.matches(".d3-test-canvas")
+        ) {
+            canvases.push(root);
+        }
+
+
+        // Find charts inside root.
+        if (root.querySelectorAll) {
+
+            root
+                .querySelectorAll(
+                    ".d3-test-canvas"
+                )
+                .forEach(
+                    function (canvasNode) {
+
+                        canvases.push(
+                            canvasNode
+                        );
+                    }
+                );
+        }
+
+
+        canvases.forEach(
+            function (canvasNode) {
+
+                // Prevent the same DOM element from initializing twice.
+                if (
+                    canvasNode.dataset.parolaInitialized ===
+                    "1"
+                ) {
+                    return;
+                }
+
+                canvasNode.dataset.parolaInitialized =
+                    "1";
+
+                initChart(
+                    canvasNode,
+                    parolaInstanceCounter++
+                );
+            }
+        );
     }
 
-    canvases.forEach(function (canvasNode, instanceIndex) {
-        initChart(canvasNode, instanceIndex);
-    });
 
     function initChart(canvasNode, instanceIndex) {
         const canvas = d3.select(canvasNode);
@@ -70,6 +129,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 "repeat(auto-fit, minmax(220px, 1fr))"
             )
             .style("gap", "15px");
+		
+		// Gutenberg already has its own block controls.
+        // Hide the D3 frontend controls inside the live preview only.
+        if (
+            canvasNode.classList.contains(
+                "d3-gutenberg-preview"
+            )
+        ) {
+            controls.style(
+                "display",
+                "none"
+            );
+        }
 
         function createInputGroup(
             parent,
@@ -7861,5 +7933,89 @@ document.addEventListener('DOMContentLoaded', function () {
             loadBackendCsv,
             500
         );
+        }
+
+
+    // =========================================================
+    // PUBLIC INITIALIZER
+    // =========================================================
+
+    window.parolaInitializeCharts =
+        initializeParolaCharts;
+
+
+    // =========================================================
+    // START ENGINE
+    // =========================================================
+
+    function startParolaEngine() {
+
+        // Initialize charts already on the page.
+        initializeParolaCharts(
+            document
+        );
+
+
+        /*
+         * Gutenberg creates and replaces preview nodes dynamically.
+         * Observe the page for newly inserted charts.
+         */
+        const observer =
+            new MutationObserver(
+                function (mutations) {
+
+                    mutations.forEach(
+                        function (mutation) {
+
+                            mutation
+                                .addedNodes
+                                .forEach(
+                                    function (node) {
+
+                                        if (
+                                            node.nodeType !==
+                                            1
+                                        ) {
+                                            return;
+                                        }
+
+                                        initializeParolaCharts(
+                                            node
+                                        );
+                                    }
+                                );
+                        }
+                    );
+                }
+            );
+
+
+        observer.observe(
+            document.body,
+            {
+                childList:
+                    true,
+
+                subtree:
+                    true
+            }
+        );
     }
-});
+
+
+    if (
+        document.readyState ===
+        "loading"
+    ) {
+
+        document.addEventListener(
+            "DOMContentLoaded",
+            startParolaEngine
+        );
+
+    } else {
+
+        startParolaEngine();
+    }
+
+})();
