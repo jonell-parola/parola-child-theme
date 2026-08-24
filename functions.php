@@ -353,6 +353,10 @@ function custom_d3_register_block() {
 					'type'    => 'string',
 					'default' => 'bar',
 				),
+				'logoStyle'   => array(
+					'type'    => 'string',
+					'default' => 'parola logo only.png',
+				),
 			),
 			'supports'        => array(
 				'multiple' => true,
@@ -385,12 +389,29 @@ function custom_d3_render_block( $attributes ) {
 		'stacked-bar',
 		'horizontal-bar',
 		'horizontal-stacked-bar',
+		'multi-line',
+		'stacked-area',
+		'heatmap',
 	);
 
 	$chart_type = isset( $attributes['chartType'] )
 		? sanitize_key( $attributes['chartType'] )
 		: 'bar';
 
+	$allowed_logo_styles = array(
+		'parola logo only.png',
+		'parola logo all white.png',
+		'parola logo with text.png',
+	);
+
+	$logo_style = isset( $attributes['logoStyle'] )
+		? sanitize_text_field( $attributes['logoStyle'] )
+		: 'parola logo only.png';
+
+	if ( ! in_array( $logo_style, $allowed_logo_styles, true ) ) {
+		$logo_style = 'parola logo only.png';
+	}
+	
 	if ( ! in_array( $chart_type, $allowed_chart_types, true ) ) {
 		$chart_type = 'bar';
 	}
@@ -417,12 +438,13 @@ function custom_d3_render_block( $attributes ) {
 	}
 
 	return sprintf(
-		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" chart-type="%5$s"></div></div>',
+		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" chart-type="%5$s" logo-style="%6$s"></div></div>',
 		$wrapper_attributes,
 		esc_attr( $canvas_id ),
 		esc_url( $csv_url ),
 		esc_attr( $csv_filename ),
-		esc_attr( $chart_type )
+		esc_attr( $chart_type ),
+		esc_attr( $logo_style )
 	);
 }
 
@@ -487,6 +509,10 @@ function custom_d3_get_editor_js() {
 			chartType: {
 				type: 'string',
 				default: 'bar'
+			},
+			logoStyle: {
+				type: 'string',
+				default: 'parola logo only.png'
 			}
 		},
 
@@ -581,6 +607,33 @@ function custom_d3_get_editor_js() {
 					onChange: function ( value ) {
 						setAttributes( {
 							chartType: value
+						} );
+					}
+				} )
+			);
+
+			children.push(
+				el( SelectControl, {
+					key: 'logo-style',
+					label: __( 'Logo Style', 'custom-d3' ),
+					value: attributes.logoStyle || 'parola logo only.png',
+					options: [
+						{
+							label: __( 'Logo Only', 'custom-d3' ),
+							value: 'parola logo only.png'
+						},
+						{
+							label: __( 'All White', 'custom-d3' ),
+							value: 'parola logo all white.png'
+						},
+						{
+							label: __( 'Logo with Text', 'custom-d3' ),
+							value: 'parola logo with text.png'
+						}
+					],
+					onChange: function ( value ) {
+						setAttributes( {
+							logoStyle: value
 						} );
 					}
 				} )
