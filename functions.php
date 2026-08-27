@@ -268,9 +268,10 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.60', // Multi-instance + robust CSV parsing (no NaN bars)
-        // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60"
-		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60"
+        '1.0.69', // Multi-instance + robust CSV parsing (no NaN bars)
+        // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60", "1.0.62", "1.0.63", "1.0.64", "1.0.65", "1.0.66", "1.0.67", "1.0.68"
+		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69"
+		// JONELL'S VERSION: "1.0.61"
         true
     );
 }
@@ -571,12 +572,12 @@ function custom_d3_get_editor_js() {
 					label: __( 'Chart Type', 'custom-d3' ),
 					value: attributes.chartType || 'bar',
 					options: [
-						{ label: __( 'Bar', 'custom-d3' ), value: 'bar' },
+						{ label: __( 'Column', 'custom-d3' ), value: 'bar' },
 						{ label: __( 'Line', 'custom-d3' ), value: 'line' },
 						{ label: __( 'Pie Chart', 'custom-d3' ), value: 'pie' },
-						{ label: __( 'Stacked Bar Chart', 'custom-d3' ), value: 'stacked-bar' },
-						{ label: __( 'Horizontal Bar Chart', 'custom-d3' ), value: 'horizontal-bar' },
-						{ label: __( 'Horizontal Stacked Bar Chart', 'custom-d3' ), value: 'horizontal-stacked-bar' }
+						{ label: __( 'Stacked Column Chart', 'custom-d3' ), value: 'stacked-bar' },
+						{ label: __( 'Bar', 'custom-d3' ), value: 'horizontal-bar' },
+						{ label: __( 'Stacked Bar Chart', 'custom-d3' ), value: 'horizontal-stacked-bar' }
 					],
 					onChange: function ( value ) {
 						setAttributes( {

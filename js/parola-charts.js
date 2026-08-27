@@ -3,21 +3,80 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.60 - "Fixed Issues"
+ * 1.0.61 - "Fixed Issues"
  */
-document.addEventListener('DOMContentLoaded', function () {
-	console.log("🚀 Parola Engine: Visual scripting pipeline initializing...");
+(function () {
 
-	const canvases = document.querySelectorAll(".d3-test-canvas");
+	console.log(
+		"🚀 Parola Engine: Visual scripting pipeline initializing..."
+	);
 
-	if (!canvases.length) {
-		console.warn("⚠️ No .d3-test-canvas containers found on this page.");
-		return;
+	let parolaInstanceCounter = 0;
+
+
+	// =========================================================
+	// INITIALIZE CHARTS
+	// Supports frontend + dynamically inserted Gutenberg previews
+	// =========================================================
+
+	function initializeParolaCharts(rootNode) {
+
+		const root =
+			rootNode || document;
+
+		const canvases = [];
+
+
+		// Root itself may be a chart.
+		if (
+			root.nodeType === 1 &&
+			root.matches &&
+			root.matches(".d3-test-canvas")
+		) {
+			canvases.push(root);
+		}
+
+
+		// Find charts inside root.
+		if (root.querySelectorAll) {
+
+			root
+				.querySelectorAll(
+					".d3-test-canvas"
+				)
+				.forEach(
+					function (canvasNode) {
+
+						canvases.push(
+							canvasNode
+						);
+					}
+				);
+		}
+
+
+		canvases.forEach(
+			function (canvasNode) {
+
+				// Prevent the same DOM element from initializing twice.
+				if (
+					canvasNode.dataset.parolaInitialized ===
+					"1"
+				) {
+					return;
+				}
+
+				canvasNode.dataset.parolaInitialized =
+					"1";
+
+				initChart(
+					canvasNode,
+					parolaInstanceCounter++
+				);
+			}
+		);
 	}
 
-	canvases.forEach(function (canvasNode, instanceIndex) {
-		initChart(canvasNode, instanceIndex);
-	});
 
 	function initChart(canvasNode, instanceIndex) {
 		const canvas = d3.select(canvasNode);
@@ -33,9 +92,16 @@ document.addEventListener('DOMContentLoaded', function () {
 			canvas.attr("data-csv-url") ||
 			canvas.attr("data-source-file") ||
 			"";
-		const defaultChartType = canvas.attr("chart-type") || "bar";
+
+		const defaultChartType =
+			canvas.attr("chart-type") ||
+			"bar";
+
+		const defaultLogoStyle =
+			canvas.attr("logo-style") ||
+			"parola logo only.png";
+
 		const activeFont = "Inter";
-		const selectedLogo = "parola logo with text.png";
 
 		canvas
 			.style("position", "relative")
@@ -45,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		canvas.selectAll("*").remove();
 
 		// =========================================================
-		// CONTROLS (Only Data Source File and Chart Type)
+		// CONTROLS
 		// =========================================================
 
 		const controls = canvas
@@ -63,6 +129,19 @@ document.addEventListener('DOMContentLoaded', function () {
 				"repeat(auto-fit, minmax(220px, 1fr))"
 			)
 			.style("gap", "15px");
+
+		// Gutenberg already has its own block controls.
+		// Hide the D3 frontend controls inside the live preview only.
+		if (
+			canvasNode.classList.contains(
+				"d3-gutenberg-preview"
+			)
+		) {
+			controls.style(
+				"display",
+				"none"
+			);
+		}
 
 		function createInputGroup(
 			parent,
@@ -108,7 +187,10 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		);
 
-		// Chart type dropdown.
+		// =========================================================
+		// CHART TYPE DROPDOWN
+		// =========================================================
+
 		const typeWrapper = controls
 			.append("div")
 			.style("display", "flex")
@@ -129,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		[
 			{
 				value: "bar",
-				label: "Bar"
+				label: "Column"
 			},
 			{
 				value: "line",
@@ -141,15 +223,15 @@ document.addEventListener('DOMContentLoaded', function () {
 			},
 			{
 				value: "stacked-bar",
-				label: "Stacked Bar Chart"
+				label: "Stacked Column Chart"
 			},
 			{
 				value: "horizontal-bar",
-				label: "Horizontal Bar Chart"
+				label: "Bar"
 			},
 			{
 				value: "horizontal-stacked-bar",
-				label: "Horizontal Stacked Bar Chart"
+				label: "Stacked Bar Chart"
 			},
 			{
 				value: "multi-line",
@@ -174,6 +256,51 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		});
 
+		// =========================================================
+		// LOGO STYLE DROPDOWN
+		// =========================================================
+
+		const logoWrapper = controls
+			.append("div")
+			.style("display", "flex")
+			.style("flex-direction", "column")
+			.style("gap", "5px");
+
+		logoWrapper
+			.append("label")
+			.text("Logo Style:")
+			.style("font-weight", "bold")
+			.style("color", "#444");
+
+		const logoPicker = logoWrapper
+			.append("select")
+			.attr("id", `logo-style-${uid}`)
+			.style("padding", "4px");
+
+		[
+			{
+				value: "parola logo only.png",
+				label: "Logo Only"
+			},
+			{
+				value: "parola logo all white.png",
+				label: "All White"
+			},
+			{
+				value: "parola logo with text.png",
+				label: "Logo with Text"
+			}
+		].forEach(function (item) {
+			const option = logoPicker
+				.append("option")
+				.attr("value", item.value)
+				.text(item.label);
+
+			if (item.value === defaultLogoStyle) {
+				option.property("selected", true);
+			}
+		});
+
 		// Locate the JavaScript asset directory for logo files.
 		let themeJsUrl = "";
 
@@ -182,7 +309,10 @@ document.addEventListener('DOMContentLoaded', function () {
 		for (const script of scripts) {
 			if (
 				script.src &&
-				(script.src.includes("parola-charts") || script.src.includes("parola"))
+				(
+					script.src.includes("parola-charts") ||
+					script.src.includes("parola")
+				)
 			) {
 				themeJsUrl = script.src.substring(
 					0,
@@ -235,11 +365,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 		function formatTooltipContent(mainContent, descriptionText) {
 			let html = `<div>${mainContent}</div>`;
+
 			if (descriptionText) {
 				html += `<div style="margin-top: 6px; padding: 6px 8px; background-color: #1e40af; color: #ffffff; border-radius: 4px; font-size: 12px; line-height: 1.3;">
                     <strong>Description:</strong> ${descriptionText}
                 </div>`;
 			}
+
 			return html;
 		}
 
@@ -295,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function () {
 			.style("width", "100%")
 			.style("justify-content", "center")
 			.style("gap", "20px")
-			.style("margin-top", "10px");
+			.style("margin-top", "16px");
 
 		const contentRow = chartWrapper
 			.append("div")
@@ -631,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				"flex"
 			);
 
-			const subtitleSize = "16px";
+			const subtitleSize = `${Math.round(parseInt(mainTitleSize, 10) * (16 / 22))}px`;
 
 			headerTitle
 				.text(mainTitleValue)
@@ -660,6 +792,7 @@ document.addEventListener('DOMContentLoaded', function () {
 					"display",
 					"none"
 				);
+
 				return;
 			}
 
@@ -687,11 +820,23 @@ document.addEventListener('DOMContentLoaded', function () {
 					);
 
 			const getColor = function (key) {
-				if (seriesColorMap && seriesColorMap.has(key)) {
+				if (
+					seriesColorMap &&
+					seriesColorMap.has(key)
+				) {
 					return seriesColorMap.get(key);
 				}
+
 				return fallbackColorScale(key);
 			};
+
+			if (activeType === "horizontal-stacked-bar" || activeType === "stacked-bar") {
+				headerLegend.style("margin-top", "44px");
+				headerRow.style("margin-bottom", "-12px");
+			} else {
+				headerLegend.style("margin-top", "24px");
+				headerRow.style("margin-bottom", "10px");
+			}
 
 			headerLegend
 				.style(
@@ -713,7 +858,10 @@ document.addEventListener('DOMContentLoaded', function () {
 						headerLegend
 							.append("div")
 							.datum(key)
-							.attr("class", `legend-item-${uid}`)
+							.attr(
+								"class",
+								`legend-item-${uid}`
+							)
 							.style(
 								"display",
 								"flex"
@@ -728,10 +876,16 @@ document.addEventListener('DOMContentLoaded', function () {
 							)
 							.style(
 								"cursor",
-								(activeType === "multi-line" || activeType === "stacked-area") ? "pointer" : "default"
+								(
+									activeType === "multi-line" ||
+									activeType === "stacked-area"
+								)
+									? "pointer"
+									: "default"
 							);
 
-					item.append("div")
+					item
+						.append("div")
 						.style(
 							"width",
 							"12px"
@@ -749,7 +903,8 @@ document.addEventListener('DOMContentLoaded', function () {
 							getColor(key)
 						);
 
-					item.append("span")
+					item
+						.append("span")
 						.text(key)
 						.style(
 							"font-family",
@@ -767,12 +922,18 @@ document.addEventListener('DOMContentLoaded', function () {
 			);
 		}
 
-
-
-		// Helper: draw a rect with rounded top-left and top-right corners only (for vertical bars)
+		// Helper: draw a rect with rounded top-left and top-right corners only.
 		function roundedTopRect(x, y, w, h, r) {
-			if (h <= 0 || w <= 0) return "";
-			const cr = Math.min(r, w / 2, h);
+			if (h <= 0 || w <= 0) {
+				return "";
+			}
+
+			const cr = Math.min(
+				r,
+				w / 2,
+				h
+			);
+
 			return [
 				`M ${x + cr} ${y}`,
 				`H ${x + w - cr}`,
@@ -785,10 +946,18 @@ document.addEventListener('DOMContentLoaded', function () {
 			].join(" ");
 		}
 
-		// Helper: draw a rect with rounded top-right and bottom-right corners only (for horizontal bars)
+		// Helper: draw a rect with rounded top-right and bottom-right corners only.
 		function roundedRightRect(x, y, w, h, r) {
-			if (w <= 0 || h <= 0) return "";
-			const cr = Math.min(r, h / 2, w);
+			if (w <= 0 || h <= 0) {
+				return "";
+			}
+
+			const cr = Math.min(
+				r,
+				h / 2,
+				w
+			);
+
 			return [
 				`M ${x} ${y}`,
 				`H ${x + w - cr}`,
@@ -805,10 +974,20 @@ document.addEventListener('DOMContentLoaded', function () {
 		// =========================================================
 
 		function renderChart(data) {
-			d3.select("body").on(`click.multi-line-${uid}`, null);
-			d3.select("body").on(`click.stacked-area-${uid}`, null);
+			d3.select("body").on(
+				`click.multi-line-${uid}`,
+				null
+			);
 
-			if (!data || data.length === 0) {
+			d3.select("body").on(
+				`click.stacked-area-${uid}`,
+				null
+			);
+
+			if (
+				!data ||
+				data.length === 0
+			) {
 				return;
 			}
 
@@ -817,17 +996,24 @@ document.addEventListener('DOMContentLoaded', function () {
 			const activeType =
 				typePicker.property("value");
 
+			const selectedLogo =
+				logoPicker.property("value") ||
+				defaultLogoStyle;
+
 			const containerWidth =
 				canvas
 					.node()
 					.getBoundingClientRect()
 					.width || 550;
 
-			let chartWidth = containerWidth;
-			let chartHeight = Math.max(
-				320,
-				containerWidth * 0.65
-			);
+			let chartWidth =
+				containerWidth;
+
+			let chartHeight =
+				Math.max(
+					320,
+					containerWidth * 0.65
+				);
 
 			const activeWidth =
 				chartWidth -
@@ -866,12 +1052,12 @@ document.addEventListener('DOMContentLoaded', function () {
 				currentSubtitle ||
 				"Global Patent Trends";
 
-			// Readable standard font sizes (Title: 22px, Subtitle: 16px, Axis: 13px, Shape: 14px, Pie Shape: 12px)
-			const mainTitleSize = "22px";
-			const subtitleSize = "16px";
-			const tickSize = "13px";
-			const shapeTextSize = "14px";
-			const pieShapeTextSize = "12px";
+			const fontScale = Math.min(1, Math.max(0.65, containerWidth / 550));
+			const mainTitleSize = `${Math.round(22 * fontScale)}px`;
+			const subtitleSize = `${Math.round(16 * fontScale)}px`;
+			const tickSize = `${Math.round(13 * fontScale)}px`;
+			const shapeTextSize = `${Math.round(14 * fontScale)}px`;
+			const pieShapeTextSize = `${Math.round(12 * fontScale)}px`;
 
 			mainTitleText
 				.text(mainTitleValue)
@@ -899,14 +1085,20 @@ document.addEventListener('DOMContentLoaded', function () {
 					subtitleSize
 				);
 
-			// Detect category, description and numeric columns.
 			const keys =
 				Object.keys(data[0]);
 
-			// Find category column dynamically or use first key
 			const categoryKey =
-				keys.find(k => k.toLowerCase() === 'company' || k.toLowerCase() === 'category') ||
-				keys[0] || "Company";
+				keys.find(
+					function (k) {
+						return (
+							k.toLowerCase() === "company" ||
+							k.toLowerCase() === "category"
+						);
+					}
+				) ||
+				keys[0] ||
+				"Company";
 
 			const descriptionKey =
 				keys.find(
@@ -920,7 +1112,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 			let valueKeys =
 				keys
-					.filter(key => key !== categoryKey && key !== descriptionKey)
+					.filter(
+						function (key) {
+							return (
+								key !== categoryKey &&
+								key !== descriptionKey
+							);
+						}
+					)
 					.filter(
 						function (key) {
 							return (
@@ -938,10 +1137,11 @@ document.addEventListener('DOMContentLoaded', function () {
 			if (
 				valueKeys.length === 0
 			) {
-				valueKeys = ["Patents"];
+				valueKeys = [
+					"Patents"
+				];
 			}
 
-			// Ensure all detected values are numeric.
 			data.forEach(
 				function (row) {
 					valueKeys.forEach(
@@ -1001,14 +1201,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
 			applyChartContainerStyles();
 
-			// Clear visual elements from the previous chart type.
-			contentRow.selectAll(`.heatmap-container-${uid}`).remove();
+			contentRow
+				.selectAll(
+					`.heatmap-container-${uid}`
+				)
+				.remove();
 
 			svg.selectAll(
 				".bar-label"
 			).remove();
 
-			svg.selectAll("rect").remove();
+			svg.selectAll(
+				"rect"
+			).remove();
 
 			svg.selectAll(
 				".chart-line"
@@ -1038,13 +1243,37 @@ document.addEventListener('DOMContentLoaded', function () {
 				".total-label"
 			).remove();
 
-			svg.selectAll(".bar-path").remove();
-			svg.selectAll(".hbar-path").remove();
-			svg.selectAll(".hbar-label").remove();
-			svg.selectAll(".multi-line-path").remove();
-			svg.selectAll(".multi-line-dot").remove();
-			svg.selectAll(".stacked-area-path").remove();
-			svg.selectAll(".hover-overlay-group").remove();
+			svg.selectAll(
+				".bar-path"
+			).remove();
+
+			svg.selectAll(
+				".hbar-path"
+			).remove();
+
+			svg.selectAll(
+				".hbar-label"
+			).remove();
+
+			svg.selectAll(
+				".multi-line-path"
+			).remove();
+
+			svg.selectAll(
+				".multi-line-dot"
+			).remove();
+
+			svg.selectAll(
+				".stacked-area-path"
+			).remove();
+
+			svg.selectAll(
+				".hover-overlay-group"
+			).remove();
+
+			svg.selectAll(
+				".multi-line-group"
+			).remove();
 
 			// =====================================================
 			// PIE CHART
@@ -1061,29 +1290,50 @@ document.addEventListener('DOMContentLoaded', function () {
 					"none"
 				);
 
-				const outerMargin = 60;
-				const radiusX = Math.max(20, activeWidth / 2 - outerMargin);
-				const radiusY = Math.max(20, activeHeight / 2 - outerMargin);
-				const radius = Math.min(radiusX, radiusY);
-				const baseRadius = radius;
+				const outerMargin =
+					30;
+
+				const radiusX =
+					Math.max(
+						20,
+						activeWidth / 2 -
+						outerMargin
+					);
+
+				const radiusY =
+					Math.max(
+						20,
+						activeHeight / 2 -
+						outerMargin
+					);
+
+				const radius =
+					Math.min(
+						radiusX,
+						radiusY
+					);
+
+				const baseRadius =
+					radius;
+
 				const scaleX = 1;
 				const scaleY = 1;
 
 				const pieGroup =
-					svg.append("g")
+					svg
+						.append("g")
 						.attr(
 							"class",
 							"pie-group"
 						)
 						.attr(
 							"transform",
-							`translate(${activeWidth / 2
-							},${activeHeight / 2 + 12
-							})`
+							`translate(${activeWidth / 2},${activeHeight / 2 + 12})`
 						);
 
 				const pie =
-					d3.pie()
+					d3
+						.pie()
 						.value(
 							function (row) {
 								return (
@@ -1096,14 +1346,16 @@ document.addEventListener('DOMContentLoaded', function () {
 						.sort(null);
 
 				const arc =
-					d3.arc()
+					d3
+						.arc()
 						.innerRadius(0)
 						.outerRadius(
 							baseRadius
 						);
 
 				const labelArc =
-					d3.arc()
+					d3
+						.arc()
 						.innerRadius(
 							baseRadius + 12
 						)
@@ -1170,7 +1422,9 @@ document.addEventListener('DOMContentLoaded', function () {
 						.selectAll(
 							".arc"
 						)
-						.data(pieData)
+						.data(
+							pieData
+						)
 						.enter()
 						.append("g")
 						.attr(
@@ -1178,8 +1432,12 @@ document.addEventListener('DOMContentLoaded', function () {
 							"arc"
 						);
 
-				const pieSlicePaths = arcs.append("path")
-					.attr("d", arc)
+				arcs
+					.append("path")
+					.attr(
+						"d",
+						arc
+					)
 					.attr(
 						"transform",
 						`scale(${scaleX},${scaleY})`
@@ -1188,37 +1446,94 @@ document.addEventListener('DOMContentLoaded', function () {
 						"fill",
 						function (slice) {
 							return colorMap.get(
-								slice.data[categoryKey]
+								slice.data[
+								categoryKey
+								]
 							);
 						}
 					)
-					.attr("stroke", "none")
-					.style("cursor", "pointer")
+					.attr(
+						"stroke",
+						"none"
+					)
+					.style(
+						"cursor",
+						"pointer"
+					)
 					.on(
 						"mouseover",
 						function () {
-							// Dim all slices, brighten hovered
-							pieGroup.selectAll("path").attr("opacity", 0.3);
-							d3.select(this).attr("opacity", 1);
-							tooltip.style("visibility", "visible");
+							pieGroup
+								.selectAll(
+									"path"
+								)
+								.attr(
+									"opacity",
+									0.3
+								);
+
+							d3
+								.select(this)
+								.attr(
+									"opacity",
+									1
+								);
+
+							tooltip.style(
+								"visibility",
+								"visible"
+							);
 						}
 					)
 					.on(
 						"mousemove",
-						function (event, slice) {
-							const desc = descriptionKey ? slice.data[descriptionKey] : null;
-							const mainTxt = `<strong>${categoryKey}:</strong> ${slice.data[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${slice.data[valueKeys[0]]}`;
+						function (
+							event,
+							slice
+						) {
+							const desc =
+								descriptionKey
+									? slice.data[
+									descriptionKey
+									]
+									: null;
+
+							const mainTxt =
+								`<strong>${categoryKey}:</strong> ${slice.data[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${slice.data[valueKeys[0]]}`;
+
 							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
+								.html(
+									formatTooltipContent(
+										mainTxt,
+										desc
+									)
+								)
+								.style(
+									"top",
+									`${event.pageY + 10}px`
+								)
+								.style(
+									"left",
+									`${event.pageX + 10}px`
+								);
 						}
 					)
 					.on(
 						"mouseout",
 						function () {
-							pieGroup.selectAll("path").attr("opacity", 1);
-							tooltip.style("visibility", "hidden");
+							pieGroup
+								.selectAll(
+									"path"
+								)
+								.attr(
+									"opacity",
+									1
+								);
+
+							tooltip.style(
+								"visibility",
+								"hidden"
+							);
 						}
 					);
 
@@ -1234,7 +1549,8 @@ document.addEventListener('DOMContentLoaded', function () {
 						}
 					);
 
-				arcs.append("text")
+				arcs
+					.append("text")
 					.attr(
 						"transform",
 						function (slice) {
@@ -1307,7 +1623,6 @@ document.addEventListener('DOMContentLoaded', function () {
 						}
 					);
 
-				// Hide pie labels that overlap.
 				const labelTexts =
 					pieGroup.selectAll(
 						"text"
@@ -1357,7 +1672,8 @@ document.addEventListener('DOMContentLoaded', function () {
 							const existingBox
 							of renderedBounds
 						) {
-							const padding = 2;
+							const padding =
+								2;
 
 							const separated =
 								box.right +
@@ -1377,14 +1693,19 @@ document.addEventListener('DOMContentLoaded', function () {
 								existingBox.bottom +
 								padding;
 
-							if (!separated) {
+							if (
+								!separated
+							) {
 								overlaps =
 									true;
+
 								break;
 							}
 						}
 
-						if (overlaps) {
+						if (
+							overlaps
+						) {
 							currentLabel.style(
 								"display",
 								"none"
@@ -1399,12 +1720,21 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 
 			// =====================================================
-			// LINE CHART (Redesigned to match Multiple Line Chart)
+			// LINE CHART
 			// =====================================================
 
-			else if (activeType === "line") {
-				xAxisGroup.style("display", null);
-				yAxisGroup.style("display", null);
+			else if (
+				activeType === "line"
+			) {
+				xAxisGroup.style(
+					"display",
+					null
+				);
+
+				yAxisGroup.style(
+					"display",
+					null
+				);
 
 				const PIE_COLORS = [
 					"#126274",
@@ -1419,290 +1749,879 @@ document.addEventListener('DOMContentLoaded', function () {
 					"#eee8aa"
 				];
 
-				const categories = data.map(function (row) {
-					return String(row[categoryKey]);
-				});
+				const categories =
+					data.map(
+						function (row) {
+							return String(
+								row[
+								categoryKey
+								]
+							);
+						}
+					);
 
-				const xScale = d3
-					.scalePoint()
-					.domain(categories)
-					.range([0, activeWidth])
-					.padding(0.1);
+				const xScale =
+					d3
+						.scalePoint()
+						.domain(
+							categories
+						)
+						.range([
+							0,
+							activeWidth
+						])
+						.padding(
+							0.1
+						);
 
 				const maximumValue =
-					d3.max(data, function (row) {
-						return row[valueKeys[0]] || 0;
-					}) || 0;
-				const maxVal = maximumValue === 0 ? 10 : maximumValue;
+					d3.max(
+						data,
+						function (row) {
+							return (
+								row[
+								valueKeys[0]
+								] || 0
+							);
+						}
+					) || 0;
 
-				const yScale = d3
-					.scaleLinear()
-					.domain([0, maxVal * 1.08])
-					.nice()
-					.range([activeHeight, 0]);
+				const maxVal =
+					maximumValue === 0
+						? 10
+						: maximumValue;
 
-				// Y-axis with horizontal light gray gridlines, hidden vertical Y axis line
-				const yAxis = d3
-					.axisLeft(yScale)
-					.ticks(6)
-					.tickSize(-activeWidth);
+				const yScale =
+					d3
+						.scaleLinear()
+						.domain([
+							0,
+							maxVal *
+							1.08
+						])
+						.nice()
+						.range([
+							activeHeight,
+							0
+						]);
+
+				const yAxis =
+					d3
+						.axisLeft(
+							yScale
+						)
+						.ticks(
+							6
+						)
+						.tickSize(
+							-activeWidth
+						);
 
 				yAxisGroup
-					.call(yAxis)
-					.call(function (g) {
-						g.select(".domain").remove();
-						g.selectAll(".tick line")
-							.attr("stroke", "#e5e5e5")
-							.attr("stroke-dasharray", null);
-						g.selectAll(".tick text")
-							.style("font-family", activeFont)
-							.style("font-size", tickSize)
-							.style("fill", "#545454");
-					});
+					.call(
+						yAxis
+					)
+					.call(
+						function (g) {
+							g
+								.select(
+									".domain"
+								)
+								.remove();
 
-				// X-axis with horizontal line, no vertical gridlines
-				const xAxis = d3.axisBottom(xScale);
+							g
+								.selectAll(
+									".tick line"
+								)
+								.attr(
+									"stroke",
+									"#e5e5e5"
+								)
+								.attr(
+									"stroke-dasharray",
+									null
+								);
+
+							g
+								.selectAll(
+									".tick text"
+								)
+								.style(
+									"font-family",
+									activeFont
+								)
+								.style(
+									"font-size",
+									tickSize
+								)
+								.style(
+									"fill",
+									"#545454"
+								);
+						}
+					);
+
+				const xAxis =
+					d3.axisBottom(
+						xScale
+					);
 
 				xAxisGroup
-					.call(xAxis)
-					.call(function (g) {
-						g.select(".domain")
-							.attr("stroke", "#ccc")
-							.attr("stroke-width", 1);
-						g.selectAll(".tick line").remove();
-						g.selectAll(".tick text")
-							.style("font-family", activeFont)
-							.style("font-size", tickSize)
-							.style("fill", "#545454");
-					});
+					.call(
+						xAxis
+					)
+					.call(
+						function (g) {
+							g
+								.select(
+									".domain"
+								)
+								.attr(
+									"stroke",
+									"#ccc"
+								)
+								.attr(
+									"stroke-width",
+									1
+								);
 
-				const lineGenerator = d3
-					.line()
-					.x(function (d) {
-						return xScale(String(d[categoryKey]));
-					})
-					.y(function (d) {
-						return yScale(d[valueKeys[0]] || 0);
-					})
-					.curve(d3.curveLinear);
+							g
+								.selectAll(
+									".tick line"
+								)
+								.remove();
 
-				const linePath = svg
-					.selectAll(".chart-line")
-					.data([data]);
+							g
+								.selectAll(
+									".tick text"
+								)
+								.style(
+									"font-family",
+									activeFont
+								)
+								.style(
+									"font-size",
+									tickSize
+								)
+								.style(
+									"fill",
+									"#545454"
+								);
+						}
+					);
 
-				linePath.exit().remove();
+				const lineGenerator =
+					d3
+						.line()
+						.x(
+							function (d) {
+								return xScale(
+									String(
+										d[
+										categoryKey
+										]
+									)
+								);
+							}
+						)
+						.y(
+							function (d) {
+								return yScale(
+									d[
+									valueKeys[0]
+									] || 0
+								);
+							}
+						)
+						.curve(
+							d3.curveLinear
+						);
+
+				const linePath =
+					svg
+						.selectAll(
+							".chart-line"
+						)
+						.data([
+							data
+						]);
+
+				linePath
+					.exit()
+					.remove();
 
 				linePath
 					.enter()
-					.append("path")
-					.attr("class", "chart-line")
-					.merge(linePath)
-					.attr("d", lineGenerator)
-					.attr("fill", "none")
-					.attr("stroke", PIE_COLORS[0])
-					.attr("stroke-width", 2.5);
+					.append(
+						"path"
+					)
+					.attr(
+						"class",
+						"chart-line"
+					)
+					.merge(
+						linePath
+					)
+					.attr(
+						"d",
+						lineGenerator
+					)
+					.attr(
+						"fill",
+						"none"
+					)
+					.attr(
+						"stroke",
+						PIE_COLORS[0]
+					)
+					.attr(
+						"stroke-width",
+						2.5
+					);
 
-				// Vertical hover line overlay for X-axis data inspection
-				const hoverOverlayGroup = svg
-					.append("g")
-					.attr("class", "hover-overlay-group");
+				const hoverOverlayGroup =
+					svg
+						.append("g")
+						.attr(
+							"class",
+							"hover-overlay-group"
+						);
 
-				const verticalHoverLine = hoverOverlayGroup
-					.append("line")
-					.attr("y1", 0)
-					.attr("y2", activeHeight)
-					.attr("stroke", "#888")
-					.attr("stroke-width", 1.5)
-					.attr("stroke-dasharray", "4 4")
-					.style("pointer-events", "none")
-					.style("visibility", "hidden");
+				const verticalHoverLine =
+					hoverOverlayGroup
+						.append(
+							"line"
+						)
+						.attr(
+							"y1",
+							0
+						)
+						.attr(
+							"y2",
+							activeHeight
+						)
+						.attr(
+							"stroke",
+							"#888"
+						)
+						.attr(
+							"stroke-width",
+							1.5
+						)
+						.attr(
+							"stroke-dasharray",
+							"4 4"
+						)
+						.style(
+							"pointer-events",
+							"none"
+						)
+						.style(
+							"visibility",
+							"hidden"
+						);
 
-				const hoverDot = hoverOverlayGroup
-					.append("circle")
-					.attr("class", "hover-dot")
-					.attr("r", 4.5)
-					.attr("fill", PIE_COLORS[0])
-					.attr("stroke", "#fff")
-					.attr("stroke-width", 1.5)
-					.style("pointer-events", "none")
-					.style("visibility", "hidden");
+				const hoverDot =
+					hoverOverlayGroup
+						.append(
+							"circle"
+						)
+						.attr(
+							"class",
+							"hover-dot"
+						)
+						.attr(
+							"r",
+							4.5
+						)
+						.attr(
+							"fill",
+							PIE_COLORS[0]
+						)
+						.attr(
+							"stroke",
+							"#fff"
+						)
+						.attr(
+							"stroke-width",
+							1.5
+						)
+						.style(
+							"pointer-events",
+							"none"
+						)
+						.style(
+							"visibility",
+							"hidden"
+						);
 
-				const overlayRect = hoverOverlayGroup
-					.append("rect")
-					.attr("width", activeWidth)
-					.attr("height", activeHeight)
-					.attr("fill", "transparent")
-					.style("cursor", "crosshair");
+				const overlayRect =
+					hoverOverlayGroup
+						.append(
+							"rect"
+						)
+						.attr(
+							"width",
+							activeWidth
+						)
+						.attr(
+							"height",
+							activeHeight
+						)
+						.attr(
+							"fill",
+							"transparent"
+						)
+						.style(
+							"cursor",
+							"crosshair"
+						);
 
 				overlayRect
-					.on("mousemove", function (event) {
-						const [mouseX] = d3.pointer(event, this);
-						let closestRow = data[0];
-						let minDistance = Infinity;
+					.on(
+						"mousemove",
+						function (event) {
+							const [
+								mouseX
+							] =
+								d3.pointer(
+									event,
+									this
+								);
 
-						data.forEach(function (row) {
-							const cx = xScale(String(row[categoryKey]));
-							const dist = Math.abs(mouseX - cx);
-							if (dist < minDistance) {
-								minDistance = dist;
-								closestRow = row;
-							}
-						});
+							let closestRow =
+								data[0];
 
-						const cx = xScale(String(closestRow[categoryKey]));
-						const cy = yScale(closestRow[valueKeys[0]] || 0);
+							let minDistance =
+								Infinity;
 
-						verticalHoverLine
-							.attr("x1", cx)
-							.attr("x2", cx)
-							.style("visibility", "visible");
+							data.forEach(
+								function (row) {
+									const cx =
+										xScale(
+											String(
+												row[
+												categoryKey
+												]
+											)
+										);
 
-						hoverDot
-							.attr("cx", cx)
-							.attr("cy", cy)
-							.style("visibility", "visible");
+									const dist =
+										Math.abs(
+											mouseX -
+											cx
+										);
 
-						const val = closestRow[valueKeys[0]] !== undefined ? closestRow[valueKeys[0]] : 0;
-						const desc = descriptionKey ? closestRow[descriptionKey] : null;
-						const mainTxt = `<div style="font-weight:bold; margin-bottom:4px;">${closestRow[categoryKey]}</div>
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <strong>${valueKeys[0]}:</strong> ${val}
-                            </div>`;
+									if (
+										dist <
+										minDistance
+									) {
+										minDistance =
+											dist;
 
-						tooltip
-							.html(formatTooltipContent(mainTxt, desc))
-							.style("visibility", "visible")
-							.style("top", `${event.pageY + 10}px`)
-							.style("left", `${event.pageX + 10}px`);
-					})
-					.on("mouseout", function () {
-						verticalHoverLine.style("visibility", "hidden");
-						hoverDot.style("visibility", "hidden");
-						tooltip.style("visibility", "hidden");
-					});
+										closestRow =
+											row;
+									}
+								}
+							);
+
+							const cx =
+								xScale(
+									String(
+										closestRow[
+										categoryKey
+										]
+									)
+								);
+
+							const cy =
+								yScale(
+									closestRow[
+									valueKeys[0]
+									] || 0
+								);
+
+							verticalHoverLine
+								.attr(
+									"x1",
+									cx
+								)
+								.attr(
+									"x2",
+									cx
+								)
+								.style(
+									"visibility",
+									"visible"
+								);
+
+							hoverDot
+								.attr(
+									"cx",
+									cx
+								)
+								.attr(
+									"cy",
+									cy
+								)
+								.style(
+									"visibility",
+									"visible"
+								);
+
+							const val =
+								closestRow[
+									valueKeys[0]
+								] !== undefined
+									? closestRow[
+									valueKeys[0]
+									]
+									: 0;
+
+							const desc =
+								descriptionKey
+									? closestRow[
+									descriptionKey
+									]
+									: null;
+
+							const mainTxt =
+								`<div style="font-weight:bold; margin-bottom:4px;">${closestRow[categoryKey]}</div>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <strong>${valueKeys[0]}:</strong> ${val}
+                                </div>`;
+
+							tooltip
+								.html(
+									formatTooltipContent(
+										mainTxt,
+										desc
+									)
+								)
+								.style(
+									"visibility",
+									"visible"
+								)
+								.style(
+									"top",
+									`${event.pageY + 10}px`
+								)
+								.style(
+									"left",
+									`${event.pageX + 10}px`
+								);
+						}
+					)
+					.on(
+						"mouseout",
+						function () {
+							verticalHoverLine.style(
+								"visibility",
+								"hidden"
+							);
+
+							hoverDot.style(
+								"visibility",
+								"hidden"
+							);
+
+							tooltip.style(
+								"visibility",
+								"hidden"
+							);
+						}
+					);
 			}
 
 			// =====================================================
 			// STANDARD VERTICAL BAR CHART
 			// =====================================================
 
-			else if (activeType === "bar") {
-				xAxisGroup.style("display", null);
-				yAxisGroup.style("display", null);
+			else if (
+				activeType === "bar"
+			) {
+				xAxisGroup.style(
+					"display",
+					null
+				);
 
-				const xScale = d3
-					.scaleBand()
-					.domain(
-						data.map(function (row) {
-							return row[categoryKey];
-						})
-					)
-					.range([0, activeWidth])
-					.padding(0.3);
+				yAxisGroup.style(
+					"display",
+					null
+				);
+
+				const xScale =
+					d3
+						.scaleBand()
+						.domain(
+							data.map(
+								function (row) {
+									return row[
+										categoryKey
+									];
+								}
+							)
+						)
+						.range([
+							0,
+							activeWidth
+						])
+						.padding(
+							0.3
+						);
 
 				const maximumValue =
-					d3.max(data, function (row) {
-						return row[valueKeys[0]] || 0;
-					}) || 0;
+					d3.max(
+						data,
+						function (row) {
+							return (
+								row[
+								valueKeys[0]
+								] || 0
+							);
+						}
+					) || 0;
 
-				const yScale = d3
-					.scaleLinear()
-					.domain([
-						0,
-						maximumValue > 0
-							? maximumValue * 1.1
-							: 1
-					])
-					.range([activeHeight, 0]);
+				const yScale =
+					d3
+						.scaleLinear()
+						.domain([
+							0,
+							maximumValue > 0
+								? maximumValue *
+								1.1
+								: 1
+						])
+						.range([
+							activeHeight,
+							0
+						]);
 
 				xAxisGroup
-					.call(d3.axisBottom(xScale))
-					.call(function (group) {
-						group
-							.select(".domain")
-							.remove();
-					})
-					.call(function (group) {
-						group
-							.selectAll(".tick line")
-							.remove();
-					})
+					.call(
+						d3.axisBottom(
+							xScale
+						)
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.select(
+									".domain"
+								)
+								.remove();
+						}
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.selectAll(
+									".tick line"
+								)
+								.remove();
+						}
+					)
+					.selectAll(
+						"text"
+					)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-size",
+						tickSize
+					);
+
+				// Render y-axis to measure label widths, then hide it
+				yAxisGroup
+					.call(
+						d3.axisLeft(yScale)
+							.ticks(5)
+					)
 					.selectAll("text")
 					.style("font-family", activeFont)
 					.style("font-size", tickSize);
 
+				let maxYLabelWidth = 0;
+				yAxisGroup.selectAll("text").each(function () {
+					const bbox = this.getBBox();
+					if (bbox.width > maxYLabelWidth) {
+						maxYLabelWidth = bbox.width;
+					}
+				});
+
 				yAxisGroup.selectAll("*").remove();
 
-				const barPaths = svg
-					.selectAll(".bar-path")
-					.data(data);
+				const colExtraLeft = maxYLabelWidth > 0 ? maxYLabelWidth + 6 : 25;
+				const colActiveWidth = chartWidth - colExtraLeft - margin.right;
 
-				barPaths.exit().remove();
+				xScale.range([0, colActiveWidth]);
 
-				const barCornerRadius = 4;
+				svg.attr("transform", `translate(${colExtraLeft},${margin.top})`);
 
-				const mergedBarPaths = barPaths
+
+				const barPaths =
+					svg
+						.selectAll(
+							".bar-path"
+						)
+						.data(
+							data
+						);
+
+				barPaths
+					.exit()
+					.remove();
+
+				const barCornerRadius =
+					4;
+
+				const mergedBarPaths =
+					barPaths
+						.enter()
+						.append(
+							"path"
+						)
+						.attr(
+							"class",
+							"bar-path"
+						)
+						.merge(
+							barPaths
+						)
+						.attr(
+							"d",
+							function (row) {
+								const bx =
+									xScale(
+										row[
+										categoryKey
+										]
+									);
+
+								const by =
+									yScale(
+										row[
+										valueKeys[0]
+										] || 0
+									);
+
+								const bw =
+									xScale.bandwidth();
+
+								const bh =
+									activeHeight -
+									by;
+
+								return roundedTopRect(
+									bx,
+									by,
+									bw,
+									bh,
+									barCornerRadius
+								);
+							}
+						)
+						.attr(
+							"fill",
+							"#1ea0af"
+						)
+						.style(
+							"cursor",
+							"pointer"
+						)
+						.on(
+							"mouseover",
+							function () {
+								svg
+									.selectAll(
+										".bar-path"
+									)
+									.attr(
+										"opacity",
+										0.3
+									);
+
+								svg
+									.selectAll(
+										".bar-label"
+									)
+									.attr(
+										"opacity",
+										0.3
+									);
+
+								d3
+									.select(this)
+									.attr(
+										"opacity",
+										1
+									);
+
+								const idx =
+									mergedBarPaths
+										.nodes()
+										.indexOf(
+											this
+										);
+
+								d3
+									.select(
+										svg
+											.selectAll(
+												".bar-label"
+											)
+											.nodes()[
+										idx
+										]
+									)
+									.attr(
+										"opacity",
+										1
+									);
+
+								tooltip.style(
+									"visibility",
+									"visible"
+								);
+							}
+						)
+						.on(
+							"mousemove",
+							function (
+								event,
+								row
+							) {
+								const desc =
+									descriptionKey
+										? row[
+										descriptionKey
+										]
+										: null;
+
+								const mainTxt =
+									`<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
+
+								tooltip
+									.html(
+										formatTooltipContent(
+											mainTxt,
+											desc
+										)
+									)
+									.style(
+										"top",
+										`${event.pageY + 10}px`
+									)
+									.style(
+										"left",
+										`${event.pageX + 10}px`
+									);
+							}
+						)
+						.on(
+							"mouseout",
+							function () {
+								svg
+									.selectAll(
+										".bar-path"
+									)
+									.attr(
+										"opacity",
+										1
+									);
+
+								svg
+									.selectAll(
+										".bar-label"
+									)
+									.attr(
+										"opacity",
+										1
+									);
+
+								tooltip.style(
+									"visibility",
+									"hidden"
+								);
+							}
+						);
+
+				svg
+					.selectAll(
+						".bar-label"
+					)
+					.data(
+						data
+					)
 					.enter()
-					.append("path")
-					.attr("class", "bar-path")
-					.merge(barPaths)
-					.attr("d", function (row) {
-						const bx = xScale(row[categoryKey]);
-						const by = yScale(row[valueKeys[0]] || 0);
-						const bw = xScale.bandwidth();
-						const bh = activeHeight - by;
-						return roundedTopRect(bx, by, bw, bh, barCornerRadius);
-					})
-					.attr("fill", "#1ea0af")
-					.style("cursor", "pointer")
-					.on("mouseover", function () {
-						// Dim all bars, highlight hovered
-						svg.selectAll(".bar-path").attr("opacity", 0.3);
-						svg.selectAll(".bar-label").attr("opacity", 0.3);
-						d3.select(this).attr("opacity", 1);
-						// Keep its label bright
-						const idx = mergedBarPaths.nodes().indexOf(this);
-						d3.select(svg.selectAll(".bar-label").nodes()[idx]).attr("opacity", 1);
-
-						tooltip.style("visibility", "visible");
-					})
-					.on(
-						"mousemove",
-						function (event, row) {
-							const desc = descriptionKey ? row[descriptionKey] : null;
-							const mainTxt = `<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
+					.append(
+						"text"
+					)
+					.attr(
+						"class",
+						"bar-label"
+					)
+					.attr(
+						"x",
+						function (row) {
+							return (
+								xScale(
+									row[
+									categoryKey
+									]
+								) +
+								xScale.bandwidth() /
+								2
+							);
 						}
 					)
-					.on("mouseout", function () {
-						svg.selectAll(".bar-path").attr("opacity", 1);
-						svg.selectAll(".bar-label").attr("opacity", 1);
-						tooltip.style("visibility", "hidden");
-					});
-
-				// Labels outside bar on top, black, not bold
-				svg.selectAll(".bar-label")
-					.data(data)
-					.enter()
-					.append("text")
-					.attr("class", "bar-label")
-					.attr("x", function (row) {
-						return xScale(row[categoryKey]) + xScale.bandwidth() / 2;
-					})
-					.attr("y", function (row) {
-						return yScale(row[valueKeys[0]] || 0) - 5;
-					})
-					.attr("text-anchor", "middle")
-					.attr("fill", "#000000")
-					.style("font-family", activeFont)
-					.style("font-weight", "normal")
-					.style("font-size", shapeTextSize)
-					.text(function (row) {
-						return row[valueKeys[0]] || 0;
-					});
+					.attr(
+						"y",
+						function (row) {
+							return (
+								yScale(
+									row[
+									valueKeys[0]
+									] || 0
+								) - 5
+							);
+						}
+					)
+					.attr(
+						"text-anchor",
+						"middle"
+					)
+					.attr(
+						"fill",
+						"#000000"
+					)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-weight",
+						"normal"
+					)
+					.style(
+						"font-size",
+						shapeTextSize
+					)
+					.text(
+						function (row) {
+							return (
+								row[
+								valueKeys[0]
+								] || 0
+							);
+						}
+					);
 			}
 
 			// =====================================================
@@ -1712,146 +2631,430 @@ document.addEventListener('DOMContentLoaded', function () {
 			else if (
 				activeType === "horizontal-bar"
 			) {
-				xAxisGroup.style("display", null);
-				yAxisGroup.style("display", null);
+				xAxisGroup.style(
+					"display",
+					null
+				);
 
-				const yScale = d3
-					.scaleBand()
-					.domain(
-						data.map(function (row) {
-							return row[categoryKey];
-						})
-					)
-					.range([0, activeHeight])
-					.padding(0.3);
+				yAxisGroup.style(
+					"display",
+					null
+				);
+
+				const yScale =
+					d3
+						.scaleBand()
+						.domain(
+							data.map(
+								function (row) {
+									return row[
+										categoryKey
+									];
+								}
+							)
+						)
+						.range([
+							0,
+							activeHeight
+						])
+						.padding(
+							0.3
+						);
 
 				const maximumValue =
-					d3.max(data, function (row) {
-						return row[valueKeys[0]] || 0;
-					}) || 0;
+					d3.max(
+						data,
+						function (row) {
+							return (
+								row[
+								valueKeys[0]
+								] || 0
+							);
+						}
+					) || 0;
 
-				const xScale = d3
-					.scaleLinear()
-					.domain([
-						0,
-						maximumValue > 0
-							? maximumValue * 1.1
-							: 1
-					])
-					.range([0, activeWidth]);
+				const xScale =
+					d3
+						.scaleLinear()
+						.domain([
+							0,
+							maximumValue > 0
+								? maximumValue *
+								1.1
+								: 1
+						])
+						.range([
+							0,
+							activeWidth
+						]);
 
-				xAxisGroup.selectAll("*").remove();
+				xAxisGroup
+					.selectAll("*")
+					.remove();
 
 				yAxisGroup
-					.call(d3.axisLeft(yScale))
-					.call(function (group) {
-						group
-							.select(".domain")
-							.remove();
-					})
-					.call(function (group) {
-						group
-							.selectAll(".tick line")
-							.remove();
-					})
-					.selectAll("text")
-					.style("font-family", activeFont)
-					.style("font-size", tickSize);
-
-				// Measure y-axis label width and dynamically adjust layout if needed
-				let maxYLabelWidth = 0;
-				yAxisGroup.selectAll("text").each(function () {
-					const bbox = this.getBBox();
-					if (bbox.width > maxYLabelWidth) {
-						maxYLabelWidth = bbox.width;
-					}
-				});
-
-				const extraLeftMargin = Math.max(margin.left, maxYLabelWidth + 15);
-				const dynamicActiveWidth = chartWidth - extraLeftMargin - margin.right;
-
-				svg.attr("transform", `translate(${extraLeftMargin},${margin.top})`);
-				mainTitleText.attr("x", -extraLeftMargin);
-				subtitleText.attr("x", -extraLeftMargin);
-
-				xScale.range([0, dynamicActiveWidth]);
-				const currentActiveWidth = dynamicActiveWidth;
-
-				const hBarPaths = svg
-					.selectAll(".hbar-path")
-					.data(data);
-
-				hBarPaths.exit().remove();
-
-				const hBarCornerRadius = 4;
-
-				const mergedHBarPaths = hBarPaths
-					.enter()
-					.append("path")
-					.attr("class", "hbar-path")
-					.merge(hBarPaths)
-					.attr("d", function (row) {
-						const bx = 0;
-						const by = yScale(row[categoryKey]);
-						const bw = xScale(row[valueKeys[0]] || 0);
-						const bh = yScale.bandwidth();
-						return roundedRightRect(bx, by, bw, bh, hBarCornerRadius);
-					})
-					.attr("fill", "#1ea0af")
-					.style("cursor", "pointer")
-					.on("mouseover", function () {
-						svg.selectAll(".hbar-path").attr("opacity", 0.3);
-						svg.selectAll(".hbar-label").attr("opacity", 0.3);
-						d3.select(this).attr("opacity", 1);
-						const idx = mergedHBarPaths.nodes().indexOf(this);
-						d3.select(svg.selectAll(".hbar-label").nodes()[idx]).attr("opacity", 1);
-						tooltip.style("visibility", "visible");
-					})
-					.on(
-						"mousemove",
-						function (event, row) {
-							const desc = descriptionKey ? row[descriptionKey] : null;
-							const mainTxt = `<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
+					.call(
+						d3.axisLeft(
+							yScale
+						)
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.select(
+									".domain"
+								)
+								.remove();
 						}
 					)
-					.on("mouseout", function () {
-						svg.selectAll(".hbar-path").attr("opacity", 1);
-						svg.selectAll(".hbar-label").attr("opacity", 1);
-						tooltip.style("visibility", "hidden");
-					});
-
-				// Labels outside bar to the right, black, not bold, clipped to chart width
-				svg.selectAll(".hbar-label")
-					.data(data)
-					.enter()
-					.append("text")
-					.attr("class", "hbar-label")
-					.attr("x", function (row) {
-						return xScale(row[valueKeys[0]] || 0) + 6;
-					})
-					.attr("y", function (row) {
-						return yScale(row[categoryKey]) + yScale.bandwidth() / 2;
-					})
-					.attr("dy", "0.35em")
-					.attr("text-anchor", "start")
-					.attr("fill", "#000000")
-					.style("font-family", activeFont)
-					.style("font-weight", "normal")
-					.style("font-size", shapeTextSize)
-					.text(function (row) {
-						return row[valueKeys[0]] || 0;
-					})
-					.each(function () {
-						// Hide label if it spills beyond the chart right edge
-						const bbox = this.getBBox();
-						if (bbox.x + bbox.width > dynamicActiveWidth) {
-							d3.select(this).style("display", "none");
+					.call(
+						function (
+							group
+						) {
+							group
+								.selectAll(
+									".tick line"
+								)
+								.remove();
 						}
-					});
+					)
+					.selectAll(
+						"text"
+					)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-size",
+						tickSize
+					);
+
+				let maxYLabelWidth =
+					0;
+
+				yAxisGroup
+					.selectAll(
+						"text"
+					)
+					.each(
+						function () {
+							const bbox =
+								this.getBBox();
+
+							if (
+								bbox.width >
+								maxYLabelWidth
+							) {
+								maxYLabelWidth =
+									bbox.width;
+							}
+						}
+					);
+
+				const hBarExtraLeft =
+					maxYLabelWidth > 0
+						? maxYLabelWidth + 6
+						: 25;
+
+				const dynamicActiveWidth =
+					chartWidth -
+					hBarExtraLeft -
+					margin.right;
+
+				svg.attr(
+					"transform",
+					`translate(${hBarExtraLeft},${margin.top})`
+				);
+
+				xScale.range([
+					0,
+					dynamicActiveWidth
+				]);
+
+				const hBarPaths =
+					svg
+						.selectAll(
+							".hbar-path"
+						)
+						.data(
+							data
+						);
+
+				hBarPaths
+					.exit()
+					.remove();
+
+				const hBarCornerRadius =
+					4;
+
+				const mergedHBarPaths =
+					hBarPaths
+						.enter()
+						.append(
+							"path"
+						)
+						.attr(
+							"class",
+							"hbar-path"
+						)
+						.merge(
+							hBarPaths
+						)
+						.attr(
+							"d",
+							function (row) {
+								const bx =
+									0;
+
+								const by =
+									yScale(
+										row[
+										categoryKey
+										]
+									);
+
+								const bw =
+									xScale(
+										row[
+										valueKeys[0]
+										] || 0
+									);
+
+								const bh =
+									yScale.bandwidth();
+
+								return roundedRightRect(
+									bx,
+									by,
+									bw,
+									bh,
+									hBarCornerRadius
+								);
+							}
+						)
+						.attr(
+							"fill",
+							"#1ea0af"
+						)
+						.style(
+							"cursor",
+							"pointer"
+						)
+						.on(
+							"mouseover",
+							function () {
+								svg
+									.selectAll(
+										".hbar-path"
+									)
+									.attr(
+										"opacity",
+										0.3
+									);
+
+								svg
+									.selectAll(
+										".hbar-label"
+									)
+									.attr(
+										"opacity",
+										0.3
+									);
+
+								d3
+									.select(this)
+									.attr(
+										"opacity",
+										1
+									);
+
+								const idx =
+									mergedHBarPaths
+										.nodes()
+										.indexOf(
+											this
+										);
+
+								d3
+									.select(
+										svg
+											.selectAll(
+												".hbar-label"
+											)
+											.nodes()[
+										idx
+										]
+									)
+									.attr(
+										"opacity",
+										1
+									);
+
+								tooltip.style(
+									"visibility",
+									"visible"
+								);
+							}
+						)
+						.on(
+							"mousemove",
+							function (
+								event,
+								row
+							) {
+								const desc =
+									descriptionKey
+										? row[
+										descriptionKey
+										]
+										: null;
+
+								const mainTxt =
+									`<strong>${categoryKey}:</strong> ${row[categoryKey]}<br><strong>${valueKeys[0]}:</strong> ${row[valueKeys[0]]}`;
+
+								tooltip
+									.html(
+										formatTooltipContent(
+											mainTxt,
+											desc
+										)
+									)
+									.style(
+										"top",
+										`${event.pageY + 10}px`
+									)
+									.style(
+										"left",
+										`${event.pageX + 10}px`
+									);
+							}
+						)
+						.on(
+							"mouseout",
+							function () {
+								svg
+									.selectAll(
+										".hbar-path"
+									)
+									.attr(
+										"opacity",
+										1
+									);
+
+								svg
+									.selectAll(
+										".hbar-label"
+									)
+									.attr(
+										"opacity",
+										1
+									);
+
+								tooltip.style(
+									"visibility",
+									"hidden"
+								);
+							}
+						);
+
+				svg
+					.selectAll(
+						".hbar-label"
+					)
+					.data(
+						data
+					)
+					.enter()
+					.append(
+						"text"
+					)
+					.attr(
+						"class",
+						"hbar-label"
+					)
+					.attr(
+						"x",
+						function (row) {
+							return (
+								xScale(
+									row[
+									valueKeys[0]
+									] || 0
+								) + 6
+							);
+						}
+					)
+					.attr(
+						"y",
+						function (row) {
+							return (
+								yScale(
+									row[
+									categoryKey
+									]
+								) +
+								yScale.bandwidth() /
+								2
+							);
+						}
+					)
+					.attr(
+						"dy",
+						"0.35em"
+					)
+					.attr(
+						"text-anchor",
+						"start"
+					)
+					.attr(
+						"fill",
+						"#000000"
+					)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-weight",
+						"normal"
+					)
+					.style(
+						"font-size",
+						shapeTextSize
+					)
+					.text(
+						function (row) {
+							return (
+								row[
+								valueKeys[0]
+								] || 0
+							);
+						}
+					)
+					.each(
+						function () {
+							const bbox =
+								this.getBBox();
+
+							if (
+								bbox.x +
+								bbox.width >
+								dynamicActiveWidth
+							) {
+								d3
+									.select(
+										this
+									)
+									.style(
+										"display",
+										"none"
+									);
+							}
+						}
+					);
 			}
 
 			// =====================================================
@@ -1861,83 +3064,243 @@ document.addEventListener('DOMContentLoaded', function () {
 			else if (
 				activeType === "stacked-bar"
 			) {
-				xAxisGroup.style("display", null);
-				yAxisGroup.style("display", null);
+				xAxisGroup.style(
+					"display",
+					null
+				);
 
-				const xScale = d3
-					.scaleBand()
-					.domain(
-						data.map(function (row) {
-							return row[categoryKey];
-						})
-					)
-					.range([0, activeWidth])
-					.padding(0.3);
+				yAxisGroup.style(
+					"display",
+					null
+				);
+
+				const xScale =
+					d3
+						.scaleBand()
+						.domain(
+							data.map(
+								function (row) {
+									return row[
+										categoryKey
+									];
+								}
+							)
+						)
+						.range([
+							0,
+							activeWidth
+						])
+						.padding(
+							0.3
+						);
 
 				const maximumStack =
-					d3.max(data, function (row) {
-						return d3.sum(
-							valueKeys,
-							function (key) {
-								return row[key] || 0;
-							}
-						);
-					}) || 10;
+					d3.max(
+						data,
+						function (row) {
+							return d3.sum(
+								valueKeys,
+								function (key) {
+									return (
+										row[
+										key
+										] || 0
+									);
+								}
+							);
+						}
+					) || 10;
 
-				const yScale = d3
-					.scaleLinear()
-					.domain([
-						0,
-						maximumStack * 1.1
-					])
-					.range([activeHeight, 0]);
+				const yScale =
+					d3
+						.scaleLinear()
+						.domain([
+							0,
+							maximumStack *
+							1.1
+						])
+						.range([
+							activeHeight,
+							0
+						]);
 
 				xAxisGroup
-					.call(d3.axisBottom(xScale))
-					.call(function (group) {
-						group
-							.select(".domain")
-							.remove();
-					})
-					.call(function (group) {
-						group
-							.selectAll(".tick line")
-							.remove();
+					.call(
+						d3.axisBottom(
+							xScale
+						)
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.select(
+									".domain"
+								)
+								.remove();
+						}
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.selectAll(
+									".tick line"
+								)
+								.remove();
+						}
+					)
+					.selectAll(
+						"text"
+					)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-size",
+						tickSize
+					);
+
+				yAxisGroup
+					.selectAll("*")
+					.remove();
+
+				yAxisGroup
+					.call(
+						d3.axisLeft(yScale)
+							.ticks(5)
+							.tickSize(-activeWidth)
+					)
+					.call(function (g) {
+						g.select(".domain").remove();
+						g.selectAll(".tick line")
+							.attr("stroke", "#e5e7eb")
+							.attr("stroke-dasharray", "3 3");
 					})
 					.selectAll("text")
 					.style("font-family", activeFont)
 					.style("font-size", tickSize);
 
-				yAxisGroup.selectAll("*").remove();
+				let maxYLabelWidth = 0;
+				yAxisGroup.selectAll("text").each(function () {
+					const bbox = this.getBBox();
+					if (bbox.width > maxYLabelWidth) {
+						maxYLabelWidth = bbox.width;
+					}
+				});
 
-				const stackedData = d3
-					.stack()
-					.keys(valueKeys)(data);
+				const extraLeftMargin = maxYLabelWidth > 0 ? maxYLabelWidth + 6 : 25;
+				const dynamicActiveWidth = chartWidth - extraLeftMargin - margin.right;
+
+				svg.attr(
+					"transform",
+					`translate(${extraLeftMargin},${margin.top})`
+				);
+
+				xScale.range([0, dynamicActiveWidth]);
+
+				xAxisGroup
+					.call(
+						d3.axisBottom(
+							xScale
+						)
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.select(
+									".domain"
+								)
+								.remove();
+						}
+					)
+					.call(
+						function (
+							group
+						) {
+							group
+								.selectAll(
+									".tick line"
+								)
+								.remove();
+						}
+					)
+					.selectAll(
+						"text"
+					)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-size",
+						tickSize
+					);
+
+				yAxisGroup.call(
+					d3.axisLeft(yScale)
+						.ticks(5)
+						.tickSize(-dynamicActiveWidth)
+				).call(function (g) {
+					g.select(".domain").remove();
+					g.selectAll(".tick line")
+						.attr("stroke", "#e5e7eb")
+						.attr("stroke-dasharray", "3 3");
+				}).selectAll("text")
+					.style("font-family", activeFont)
+					.style("font-size", tickSize);
+
+				const stackedData =
+					d3
+						.stack()
+						.keys(
+							valueKeys
+						)(
+							data
+						);
 
 				const stackedColors = [
 					"#063137",
 					"#16a1b5"
 				];
 
-				const colorScale = d3
-					.scaleOrdinal()
-					.domain(valueKeys)
-					.range(
-						valueKeys.map(
-							function (_, index) {
-								return stackedColors[
-									index %
-									stackedColors.length
-								];
-							}
+				const colorScale =
+					d3
+						.scaleOrdinal()
+						.domain(
+							valueKeys
 						)
-					);
+						.range(
+							valueKeys.map(
+								function (
+									_,
+									index
+								) {
+									return stackedColors[
+										index %
+										stackedColors.length
+									];
+								}
+							)
+						);
 
-				const layers = svg
-					.selectAll(".stack-layer")
-					.data(stackedData);
+				const layers =
+					svg
+						.selectAll(
+							".stack-layer"
+						)
+						.data(
+							stackedData
+						);
 
-				layers.exit().remove();
+				layers
+					.exit()
+					.remove();
 
 				const enteredLayers =
 					layers
@@ -1950,10 +3313,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
 				const mergedLayers =
 					enteredLayers
-						.merge(layers)
+						.merge(
+							layers
+						)
 						.attr(
 							"fill",
-							function (layer) {
+							function (
+								layer
+							) {
 								return colorScale(
 									layer.key
 								);
@@ -1962,126 +3329,184 @@ document.addEventListener('DOMContentLoaded', function () {
 
 				const segments =
 					mergedLayers
-						.selectAll("rect")
-						.data(function (layer) {
-							return layer;
-						});
+						.selectAll(
+							"path"
+						)
+						.data(
+							function (
+								layer
+							) {
+								return layer;
+							}
+						);
 
-				segments.exit().remove();
+				segments
+					.exit()
+					.remove();
 
-				const stackCornerRadius = 4;
+				const stackCornerRadius =
+					4;
 
 				segments
 					.enter()
-					.append("path")
-					.merge(segments)
-					.attr("d", function (segment) {
-						const bx = xScale(segment.data[categoryKey]);
-						const by = yScale(segment[1]);
-						const bw = xScale.bandwidth();
-						const bh = yScale(segment[0]) - yScale(segment[1]);
-						if (bh <= 0 || bw <= 0) return "";
-						return roundedTopRect(bx, by, bw, bh, stackCornerRadius);
-					})
-					.style("cursor", "pointer")
-					.on("mouseover", function () {
-						// Dim all stack rects
-						svg.selectAll(".stack-layer path").attr("opacity", 0.3);
-						d3.select(this).attr("opacity", 1);
+					.append(
+						"path"
+					)
+					.merge(
+						segments
+					)
+					.attr(
+						"d",
+						function (
+							segment
+						) {
+							const bx =
+								xScale(
+									segment
+										.data[
+									categoryKey
+									]
+								);
 
-						tooltip.style("visibility", "visible");
-					})
-					.on(
-						"mousemove",
-						function (event, segment) {
-							const layerKey =
-								d3.select(this.parentNode).datum().key;
+							const by =
+								yScale(
+									segment[1]
+								);
 
-							const segmentValue =
-								segment[1] - segment[0];
+							const bw =
+								xScale.bandwidth();
 
-							const desc = descriptionKey ? segment.data[descriptionKey] : null;
-							const mainTxt = `<strong>${categoryKey}:</strong> ${segment.data[categoryKey]}<br><strong>${layerKey}:</strong> ${segmentValue}`;
+							const bh =
+								yScale(
+									segment[0]
+								) -
+								yScale(
+									segment[1]
+								);
 
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
+							if (
+								bh <= 0 ||
+								bw <= 0
+							) {
+								return "";
+							}
+
+							return roundedTopRect(
+								bx,
+								by,
+								bw,
+								bh,
+								stackCornerRadius
+							);
 						}
 					)
-					.on("mouseout", function () {
-						svg.selectAll(".stack-layer path").attr("opacity", 1);
-						tooltip.style("visibility", "hidden");
-					});
-
-				const stackLabels = mergedLayers
-					.selectAll(".stack-label")
-					.data(function (layer) {
-						return layer;
-					})
-					.enter()
-					.append("text")
-					.attr(
-						"class",
-						"stack-label"
-					)
-					.attr("x", function (segment) {
-						return (
-							xScale(
-								segment.data[
-								categoryKey
-								]
-							) +
-							xScale.bandwidth() / 2
-						);
-					})
-					.attr("y", function (segment) {
-						return (
-							yScale(segment[1]) + 15
-						);
-					})
-					.attr(
-						"text-anchor",
-						"middle"
-					)
-					.attr("fill", "#ffffff")
 					.style(
-						"font-family",
-						activeFont
+						"cursor",
+						"pointer"
 					)
-					.style(
-						"font-size",
-						shapeTextSize
+					.on(
+						"mouseover",
+						function () {
+							svg
+								.selectAll(
+									".stack-layer path"
+								)
+								.attr(
+									"opacity",
+									0.3
+								);
+
+							d3
+								.select(
+									this
+								)
+								.attr(
+									"opacity",
+									1
+								);
+
+							tooltip.style(
+								"visibility",
+								"visible"
+							);
+						}
 					)
-					.text(function (segment) {
-						const value =
-							segment[1] -
-							segment[0];
+					.on(
+						"mousemove",
+						function (
+							event,
+							segment
+						) {
+							const layerKey =
+								d3
+									.select(
+										this.parentNode
+									)
+									.datum()
+									.key;
 
-						return value > 0
-							? value
-							: "";
-					});
+							const segmentValue =
+								segment[1] -
+								segment[0];
 
-				// Filter out labels if the text size exceeds the inner shape segment dimensions
-				stackLabels.each(function (segment) {
-					const label = d3.select(this);
-					const segHeight = yScale(segment[0]) - yScale(segment[1]);
-					const segWidth = xScale.bandwidth();
-					const bbox = this.getBBox();
+							const desc =
+								descriptionKey
+									? segment
+										.data[
+									descriptionKey
+									]
+									: null;
 
-					if (bbox.height > segHeight || bbox.width > segWidth) {
-						label.style("display", "none");
-					}
-				});
+							const mainTxt =
+								`<strong>${categoryKey}:</strong> ${segment.data[categoryKey]}<br><strong>${layerKey}:</strong> ${segmentValue}`;
 
-				// Total labels above stacked columns.
-				svg.selectAll(
-					".total-label"
-				)
-					.data(data)
+							tooltip
+								.html(
+									formatTooltipContent(
+										mainTxt,
+										desc
+									)
+								)
+								.style(
+									"top",
+									`${event.pageY + 10}px`
+								)
+								.style(
+									"left",
+									`${event.pageX + 10}px`
+								);
+						}
+					)
+					.on(
+						"mouseout",
+						function () {
+							svg
+								.selectAll(
+									".stack-layer path"
+								)
+								.attr(
+									"opacity",
+									1
+								);
+
+							tooltip.style(
+								"visibility",
+								"hidden"
+							);
+						}
+					);
+
+				svg
+					.selectAll(
+						".total-label"
+					)
+					.data(
+						data
+					)
 					.enter()
-					.append("text")
+					.append(
+						"text"
+					)
 					.attr(
 						"class",
 						"total-label"
@@ -2112,8 +3537,7 @@ document.addEventListener('DOMContentLoaded', function () {
 										return (
 											row[
 											key
-											] ||
-											0
+											] || 0
 										);
 									}
 								);
@@ -2155,8 +3579,7 @@ document.addEventListener('DOMContentLoaded', function () {
 									return (
 										row[
 										key
-										] ||
-										0
+										] || 0
 									);
 								}
 							);
@@ -2183,7 +3606,8 @@ document.addEventListener('DOMContentLoaded', function () {
 				);
 
 				const yScale =
-					d3.scaleBand()
+					d3
+						.scaleBand()
 						.domain(
 							data.map(
 								function (
@@ -2199,7 +3623,9 @@ document.addEventListener('DOMContentLoaded', function () {
 							0,
 							activeHeight
 						])
-						.padding(0.3);
+						.padding(
+							0.3
+						);
 
 				const maximumStack =
 					d3.max(
@@ -2213,8 +3639,7 @@ document.addEventListener('DOMContentLoaded', function () {
 									return (
 										row[
 										key
-										] ||
-										0
+										] || 0
 									);
 								}
 							);
@@ -2222,7 +3647,8 @@ document.addEventListener('DOMContentLoaded', function () {
 					) || 10;
 
 				const xScale =
-					d3.scaleLinear()
+					d3
+						.scaleLinear()
 						.domain([
 							0,
 							maximumStack *
@@ -2277,39 +3703,65 @@ document.addEventListener('DOMContentLoaded', function () {
 						tickSize
 					);
 
-				// Measure y-axis label width and dynamically adjust layout if needed
-				let maxYLabelWidth = 0;
-				yAxisGroup.selectAll("text").each(function () {
-					const bbox = this.getBBox();
-					if (bbox.width > maxYLabelWidth) {
-						maxYLabelWidth = bbox.width;
-					}
-				});
+				let maxYLabelWidth =
+					0;
 
-				const extraLeftMargin = Math.max(margin.left, maxYLabelWidth + 15);
-				const dynamicActiveWidth = chartWidth - extraLeftMargin - margin.right;
+				yAxisGroup
+					.selectAll(
+						"text"
+					)
+					.each(
+						function () {
+							const bbox =
+								this.getBBox();
 
-				svg.attr("transform", `translate(${extraLeftMargin},${margin.top})`);
-				mainTitleText.attr("x", -extraLeftMargin);
-				subtitleText.attr("x", -extraLeftMargin);
+							if (
+								bbox.width >
+								maxYLabelWidth
+							) {
+								maxYLabelWidth =
+									bbox.width;
+							}
+						}
+					);
 
-				xScale.range([0, dynamicActiveWidth]);
-				const currentActiveWidth = dynamicActiveWidth;
+				const extraLeftMargin =
+					maxYLabelWidth > 0
+						? maxYLabelWidth + 6
+						: 25;
+
+				const dynamicActiveWidth =
+					chartWidth -
+					extraLeftMargin -
+					margin.right;
+
+				svg.attr(
+					"transform",
+					`translate(${extraLeftMargin},${margin.top})`
+				);
+
+				xScale.range([
+					0,
+					dynamicActiveWidth
+				]);
 
 				const stackedData =
-					d3.stack()
+					d3
+						.stack()
 						.keys(
 							valueKeys
-						)(data);
+						)(
+							data
+						);
 
-				const stackedColors =
-					[
-						"#063137",
-						"#16a1b5"
-					];
+				const stackedColors = [
+					"#063137",
+					"#16a1b5"
+				];
 
 				const colorScale =
-					d3.scaleOrdinal()
+					d3
+						.scaleOrdinal()
 						.domain(
 							valueKeys
 						)
@@ -2328,9 +3780,10 @@ document.addEventListener('DOMContentLoaded', function () {
 						);
 
 				const layers =
-					svg.selectAll(
-						".stack-layer"
-					)
+					svg
+						.selectAll(
+							".stack-layer"
+						)
 						.data(
 							stackedData
 						);
@@ -2342,7 +3795,9 @@ document.addEventListener('DOMContentLoaded', function () {
 				const enteredLayers =
 					layers
 						.enter()
-						.append("g")
+						.append(
+							"g"
+						)
 						.attr(
 							"class",
 							"stack-layer"
@@ -2367,7 +3822,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				const segments =
 					mergedLayers
 						.selectAll(
-							"rect"
+							"path"
 						)
 						.data(
 							function (
@@ -2381,152 +3836,162 @@ document.addEventListener('DOMContentLoaded', function () {
 					.exit()
 					.remove();
 
-				const hStackCornerRadius = 4;
+				const hStackCornerRadius =
+					4;
 
 				segments
 					.enter()
-					.append("path")
-					.merge(segments)
-					.attr("d", function (segment) {
-						const bx = xScale(segment[0]);
-						const by = yScale(segment.data[categoryKey]);
-						const bw = xScale(segment[1]) - xScale(segment[0]);
-						const bh = yScale.bandwidth();
-						return roundedRightRect(bx, by, bw, bh, hStackCornerRadius);
-					})
-					.style("cursor", "pointer")
-					.on(
-						"mouseover",
-						function () {
-							svg.selectAll(".stack-layer path").attr("opacity", 0.3);
-							d3.select(this).attr("opacity", 1);
-							tooltip.style("visibility", "visible");
-						}
+					.append(
+						"path"
 					)
-					.on(
-						"mousemove",
-						function (event, segment) {
-							const layerKey =
-								d3.select(this.parentNode).datum().key;
-
-							const value =
-								segment[1] - segment[0];
-
-							const desc = descriptionKey ? segment.data[descriptionKey] : null;
-							const mainTxt = `<strong>${categoryKey}:</strong> ${segment.data[categoryKey]}<br><strong>${layerKey}:</strong> ${value}`;
-
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
-						}
-					)
-					.on(
-						"mouseout",
-						function () {
-							svg.selectAll(".stack-layer path").attr("opacity", 1);
-							tooltip.style("visibility", "hidden");
-						}
-					);
-
-				const horizStackLabels = mergedLayers
-					.selectAll(
-						".stack-label"
-					)
-					.data(
-						function (
-							layer
-						) {
-							return layer;
-						}
-					)
-					.enter()
-					.append("text")
-					.attr(
-						"class",
-						"stack-label"
+					.merge(
+						segments
 					)
 					.attr(
-						"x",
+						"d",
 						function (
 							segment
 						) {
-							return (
-								xScale(segment[1]) - 8
-							);
-						}
-					)
-					.attr(
-						"y",
-						function (
-							segment
-						) {
-							return (
+							const bx =
+								xScale(
+									segment[0]
+								);
+
+							const by =
 								yScale(
 									segment
 										.data[
 									categoryKey
 									]
-								) +
-								yScale.bandwidth() /
-								2
+								);
+
+							const bw =
+								xScale(
+									segment[1]
+								) -
+								xScale(
+									segment[0]
+								);
+
+							const bh =
+								yScale.bandwidth();
+
+							return roundedRightRect(
+								bx,
+								by,
+								bw,
+								bh,
+								hStackCornerRadius
 							);
 						}
 					)
-					.attr(
-						"dy",
-						"0.35em"
-					)
-					.attr(
-						"text-anchor",
-						"end"
-					)
-					.attr(
-						"fill",
-						"#ffffff"
-					)
 					.style(
-						"font-family",
-						activeFont
+						"cursor",
+						"pointer"
 					)
-					.style(
-						"font-size",
-						shapeTextSize
+					.on(
+						"mouseover",
+						function () {
+							svg
+								.selectAll(
+									".stack-layer path"
+								)
+								.attr(
+									"opacity",
+									0.3
+								);
+
+							d3
+								.select(
+									this
+								)
+								.attr(
+									"opacity",
+									1
+								);
+
+							tooltip.style(
+								"visibility",
+								"visible"
+							);
+						}
 					)
-					.text(
+					.on(
+						"mousemove",
 						function (
+							event,
 							segment
 						) {
+							const layerKey =
+								d3
+									.select(
+										this.parentNode
+									)
+									.datum()
+									.key;
+
 							const value =
 								segment[1] -
 								segment[0];
 
-							return value >
-								0
-								? value
-								: "";
+							const desc =
+								descriptionKey
+									? segment
+										.data[
+									descriptionKey
+									]
+									: null;
+
+							const mainTxt =
+								`<strong>${categoryKey}:</strong> ${segment.data[categoryKey]}<br><strong>${layerKey}:</strong> ${value}`;
+
+							tooltip
+								.html(
+									formatTooltipContent(
+										mainTxt,
+										desc
+									)
+								)
+								.style(
+									"top",
+									`${event.pageY + 10}px`
+								)
+								.style(
+									"left",
+									`${event.pageX + 10}px`
+								);
+						}
+					)
+					.on(
+						"mouseout",
+						function () {
+							svg
+								.selectAll(
+									".stack-layer path"
+								)
+								.attr(
+									"opacity",
+									1
+								);
+
+							tooltip.style(
+								"visibility",
+								"hidden"
+							);
 						}
 					);
 
-				// Filter out labels if text size exceeds shape dimensions
-				horizStackLabels.each(function (segment) {
-					const label = d3.select(this);
-					const segWidth = xScale(segment[1]) - xScale(segment[0]);
-					const segHeight = yScale.bandwidth();
-					const bbox = this.getBBox();
-
-					if (bbox.width > segWidth || bbox.height > segHeight) {
-						label.style("display", "none");
-					}
-				});
-
-				// Totals displayed to the right of each row.
-				svg.selectAll(
-					".total-label"
-				)
-					.data(data)
+				svg
+					.selectAll(
+						".total-label"
+					)
+					.data(
+						data
+					)
 					.enter()
-					.append("text")
+					.append(
+						"text"
+					)
 					.attr(
 						"class",
 						"total-label"
@@ -2543,8 +4008,7 @@ document.addEventListener('DOMContentLoaded', function () {
 										return (
 											row[
 											key
-											] ||
-											0
+											] || 0
 										);
 									}
 								);
@@ -2600,28 +4064,52 @@ document.addEventListener('DOMContentLoaded', function () {
 									return (
 										row[
 										key
-										] ||
-										0
+										] || 0
 									);
 								}
 							);
 						}
 					)
-					.each(function () {
-						const bbox = this.getBBox();
-						if (bbox.x + bbox.width > dynamicActiveWidth) {
-							d3.select(this).style("display", "none");
+					.each(
+						function () {
+							const bbox =
+								this.getBBox();
+
+							if (
+								bbox.x +
+								bbox.width >
+								dynamicActiveWidth
+							) {
+								d3
+									.select(
+										this
+									)
+									.style(
+										"display",
+										"none"
+									);
+							}
 						}
-					});
+					);
 			}
 
 			// =====================================================
 			// MULTI-LINE & STACKED AREA SHARED SETUP
 			// =====================================================
 
-			else if (activeType === "multi-line" || activeType === "stacked-area") {
-				xAxisGroup.style("display", null);
-				yAxisGroup.style("display", null);
+			else if (
+				activeType === "multi-line" ||
+				activeType === "stacked-area"
+			) {
+				xAxisGroup.style(
+					"display",
+					null
+				);
+
+				yAxisGroup.style(
+					"display",
+					null
+				);
 
 				const PIE_COLORS = [
 					"#126274",
@@ -2636,26 +4124,69 @@ document.addEventListener('DOMContentLoaded', function () {
 					"#eee8aa"
 				];
 
-				// Calculate total per valueKey across all rows for color hierarchy
-				const totalsMap = new Map();
-				valueKeys.forEach(function (key) {
-					const total = d3.sum(data, function (row) {
-						return row[key] || 0;
-					});
-					totalsMap.set(key, total);
-				});
+				const totalsMap =
+					new Map();
 
-				// Sort series descending by total value (matching pie chart color ranking)
-				const sortedKeys = [...valueKeys].sort(function (a, b) {
-					return (totalsMap.get(b) || 0) - (totalsMap.get(a) || 0);
-				});
+				valueKeys.forEach(
+					function (key) {
+						const total =
+							d3.sum(
+								data,
+								function (row) {
+									return (
+										row[
+										key
+										] || 0
+									);
+								}
+							);
 
-				const seriesColorMap = new Map();
-				sortedKeys.forEach(function (key, index) {
-					seriesColorMap.set(key, PIE_COLORS[index % PIE_COLORS.length]);
-				});
+						totalsMap.set(
+							key,
+							total
+						);
+					}
+				);
 
-				// Re-render HTML Header Legend with exact color mapping
+				const sortedKeys =
+					[...valueKeys].sort(
+						function (
+							a,
+							b
+						) {
+							return (
+								(
+									totalsMap.get(
+										b
+									) || 0
+								) -
+								(
+									totalsMap.get(
+										a
+									) || 0
+								)
+							);
+						}
+					);
+
+				const seriesColorMap =
+					new Map();
+
+				sortedKeys.forEach(
+					function (
+						key,
+						index
+					) {
+						seriesColorMap.set(
+							key,
+							PIE_COLORS[
+							index %
+							PIE_COLORS.length
+							]
+						);
+					}
+				);
+
 				renderHTMLHeader(
 					mainTitleValue,
 					subtitleValue,
@@ -2666,513 +4197,1561 @@ document.addEventListener('DOMContentLoaded', function () {
 					seriesColorMap
 				);
 
-				const categories = data.map(function (row) {
-					return String(row[categoryKey]);
-				});
+				const categories =
+					data.map(
+						function (row) {
+							return String(
+								row[
+								categoryKey
+								]
+							);
+						}
+					);
 
-				const xScale = d3
-					.scalePoint()
-					.domain(categories)
-					.range([0, activeWidth])
-					.padding(0.1);
+				const xScale =
+					d3
+						.scalePoint()
+						.domain(
+							categories
+						)
+						.range([
+							0,
+							activeWidth
+						])
+						.padding(
+							0.1
+						);
 
 				// =====================================================
 				// MULTIPLE LINE CHART
 				// =====================================================
 
-				if (activeType === "multi-line") {
-					let maxVal = 0;
-					data.forEach(function (row) {
-						sortedKeys.forEach(function (key) {
-							const val = row[key] || 0;
-							if (val > maxVal) maxVal = val;
-						});
-					});
-					if (maxVal === 0) maxVal = 10;
+				if (
+					activeType === "multi-line"
+				) {
+					let maxVal =
+						0;
 
-					const yScale = d3
-						.scaleLinear()
-						.domain([0, maxVal * 1.08])
-						.nice()
-						.range([activeHeight, 0]);
+					data.forEach(
+						function (row) {
+							sortedKeys.forEach(
+								function (
+									key
+								) {
+									const val =
+										row[
+										key
+										] || 0;
 
-					// Y-axis with horizontal light gray gridlines, hidden vertical Y axis line
-					const yAxis = d3
-						.axisLeft(yScale)
-						.ticks(6)
-						.tickSize(-activeWidth);
+									if (
+										val >
+										maxVal
+									) {
+										maxVal =
+											val;
+									}
+								}
+							);
+						}
+					);
 
-					yAxisGroup
-						.call(yAxis)
-						.call(function (g) {
-							g.select(".domain").remove(); // No vertical line for Y axis
-							g.selectAll(".tick line")
-								.attr("stroke", "#e5e5e5")
-								.attr("stroke-dasharray", null);
-							g.selectAll(".tick text")
-								.style("font-family", activeFont)
-								.style("font-size", tickSize)
-								.style("fill", "#545454");
-						});
-
-					// X-axis with horizontal line, no vertical gridlines
-					const xAxis = d3.axisBottom(xScale);
-
-					xAxisGroup
-						.call(xAxis)
-						.call(function (g) {
-							g.select(".domain")
-								.attr("stroke", "#ccc")
-								.attr("stroke-width", 1);
-							g.selectAll(".tick line").remove(); // No vertical gridlines for X axis
-							g.selectAll(".tick text")
-								.style("font-family", activeFont)
-								.style("font-size", tickSize)
-								.style("fill", "#545454");
-						});
-
-					const lineGenerator = d3
-						.line()
-						.x(function (d) {
-							return xScale(String(d[categoryKey]));
-						})
-						.y(function (d, i, nodes) {
-							const key = d3.select(nodes[i].parentNode).datum();
-							return yScale(d[key] || 0);
-						})
-						.curve(d3.curveLinear);
-
-					const seriesGroups = svg
-						.selectAll(".multi-line-group")
-						.data(sortedKeys)
-						.enter()
-						.append("g")
-						.attr("class", "multi-line-group")
-						.datum(function (key) {
-							return key;
-						});
-
-					const linePaths = seriesGroups
-						.append("path")
-						.attr("class", "multi-line-path")
-						.attr("d", function (key) {
-							return lineGenerator.y(function (d) {
-								return yScale(d[key] || 0);
-							})(data);
-						})
-						.attr("fill", "none")
-						.attr("stroke", function (key) {
-							return seriesColorMap.get(key);
-						})
-						.attr("stroke-width", 2.5)
-						.style("cursor", "pointer")
-						.style("transition", "opacity 0.2s ease, stroke-width 0.2s ease");
-
-					// Interactive Line state
-					let selectedKey = null;
-
-					function highlightLine(targetKey) {
-						linePaths.each(function (key) {
-							const path = d3.select(this);
-							if (targetKey === null || key === targetKey) {
-								path.style("opacity", 1)
-									.attr("stroke-width", key === targetKey ? 4 : 2.5);
-							} else {
-								path.style("opacity", 0.15)
-									.attr("stroke-width", 2.5);
-							}
-						});
-
-						headerLegend.selectAll(`.legend-item-${uid}`).each(function (key) {
-							const item = d3.select(this);
-							if (targetKey === null || key === targetKey) {
-								item.style("opacity", 1);
-							} else {
-								item.style("opacity", 0.3);
-							}
-						});
+					if (
+						maxVal === 0
+					) {
+						maxVal =
+							10;
 					}
 
-					// Legend hover & click interactions (shows description tooltip)
-					headerLegend.selectAll(`.legend-item-${uid}`)
-						.on("mouseover", function (event, key) {
-							if (selectedKey === null) {
-								highlightLine(key);
+					const yScale =
+						d3
+							.scaleLinear()
+							.domain([
+								0,
+								maxVal *
+								1.08
+							])
+							.nice()
+							.range([
+								activeHeight,
+								0
+							]);
+
+					const yAxis =
+						d3
+							.axisLeft(
+								yScale
+							)
+							.ticks(
+								6
+							)
+							.tickSize(
+								-activeWidth
+							);
+
+					yAxisGroup
+						.call(
+							yAxis
+						)
+						.call(
+							function (
+								g
+							) {
+								g
+									.select(
+										".domain"
+									)
+									.remove();
+
+								g
+									.selectAll(
+										".tick line"
+									)
+									.attr(
+										"stroke",
+										"#e5e5e5"
+									)
+									.attr(
+										"stroke-dasharray",
+										null
+									);
+
+								g
+									.selectAll(
+										".tick text"
+									)
+									.style(
+										"font-family",
+										activeFont
+									)
+									.style(
+										"font-size",
+										tickSize
+									)
+									.style(
+										"fill",
+										"#545454"
+									);
 							}
-							const desc = currentDescriptions[key] || null;
-							const mainTxt = `<strong>Label:</strong> ${key}`;
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("visibility", "visible");
-						})
-						.on("mousemove", function (event) {
-							tooltip
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
-						})
-						.on("mouseout", function () {
-							if (selectedKey === null) {
-								highlightLine(null);
-								tooltip.style("visibility", "hidden");
+						);
+
+					const xAxis =
+						d3.axisBottom(
+							xScale
+						);
+
+					xAxisGroup
+						.call(
+							xAxis
+						)
+						.call(
+							function (
+								g
+							) {
+								g
+									.select(
+										".domain"
+									)
+									.attr(
+										"stroke",
+										"#ccc"
+									)
+									.attr(
+										"stroke-width",
+										1
+									);
+
+								g
+									.selectAll(
+										".tick line"
+									)
+									.remove();
+
+								g
+									.selectAll(
+										".tick text"
+									)
+									.style(
+										"font-family",
+										activeFont
+									)
+									.style(
+										"font-size",
+										tickSize
+									)
+									.style(
+										"fill",
+										"#545454"
+									);
 							}
-						})
-						.on("click", function (event, key) {
-							event.stopPropagation();
-							if (selectedKey === key) {
-								selectedKey = null;
-								highlightLine(null);
-								tooltip.style("visibility", "hidden");
-							} else {
-								selectedKey = key;
-								highlightLine(key);
-								const desc = currentDescriptions[key] || null;
-								const mainTxt = `<strong>Label:</strong> ${key}`;
+						);
+
+					const seriesGroups =
+						svg
+							.selectAll(
+								".multi-line-group"
+							)
+							.data(
+								sortedKeys
+							)
+							.enter()
+							.append(
+								"g"
+							)
+							.attr(
+								"class",
+								"multi-line-group"
+							)
+							.datum(
+								function (
+									key
+								) {
+									return key;
+								}
+							);
+
+					const linePaths =
+						seriesGroups
+							.append(
+								"path"
+							)
+							.attr(
+								"class",
+								"multi-line-path"
+							)
+							.attr(
+								"d",
+								function (
+									key
+								) {
+									const generator =
+										d3
+											.line()
+											.x(
+												function (
+													d
+												) {
+													return xScale(
+														String(
+															d[
+															categoryKey
+															]
+														)
+													);
+												}
+											)
+											.y(
+												function (
+													d
+												) {
+													return yScale(
+														d[
+														key
+														] || 0
+													);
+												}
+											)
+											.curve(
+												d3.curveLinear
+											);
+
+									return generator(
+										data
+									);
+								}
+							)
+							.attr(
+								"fill",
+								"none"
+							)
+							.attr(
+								"stroke",
+								function (
+									key
+								) {
+									return seriesColorMap.get(
+										key
+									);
+								}
+							)
+							.attr(
+								"stroke-width",
+								2.5
+							)
+							.style(
+								"cursor",
+								"pointer"
+							)
+							.style(
+								"transition",
+								"opacity 0.2s ease, stroke-width 0.2s ease"
+							);
+
+					let selectedKey =
+						null;
+
+					function highlightLine(
+						targetKey
+					) {
+						linePaths.each(
+							function (
+								key
+							) {
+								const path =
+									d3.select(
+										this
+									);
+
+								if (
+									targetKey === null ||
+									key === targetKey
+								) {
+									path
+										.style(
+											"opacity",
+											1
+										)
+										.attr(
+											"stroke-width",
+											key ===
+												targetKey
+												? 4
+												: 2.5
+										);
+								} else {
+									path
+										.style(
+											"opacity",
+											0.15
+										)
+										.attr(
+											"stroke-width",
+											2.5
+										);
+								}
+							}
+						);
+
+						headerLegend
+							.selectAll(
+								`.legend-item-${uid}`
+							)
+							.each(
+								function (
+									key
+								) {
+									const item =
+										d3.select(
+											this
+										);
+
+									if (
+										targetKey ===
+										null ||
+										key ===
+										targetKey
+									) {
+										item.style(
+											"opacity",
+											1
+										);
+									} else {
+										item.style(
+											"opacity",
+											0.3
+										);
+									}
+								}
+							);
+					}
+
+					headerLegend
+						.selectAll(
+							`.legend-item-${uid}`
+						)
+						.on(
+							"mouseover",
+							function (
+								event,
+								key
+							) {
+								if (
+									selectedKey ===
+									null
+								) {
+									highlightLine(
+										key
+									);
+								}
+
+								const desc =
+									currentDescriptions[
+									key
+									] || null;
+
+								const mainTxt =
+									`<strong>Label:</strong> ${key}`;
+
 								tooltip
-									.html(formatTooltipContent(mainTxt, desc))
-									.style("visibility", "visible")
-									.style("top", `${event.pageY + 10}px`)
-									.style("left", `${event.pageX + 10}px`);
+									.html(
+										formatTooltipContent(
+											mainTxt,
+											desc
+										)
+									)
+									.style(
+										"visibility",
+										"visible"
+									);
 							}
-						});
+						)
+						.on(
+							"mousemove",
+							function (
+								event
+							) {
+								tooltip
+									.style(
+										"top",
+										`${event.pageY + 10}px`
+									)
+									.style(
+										"left",
+										`${event.pageX + 10}px`
+									);
+							}
+						)
+						.on(
+							"mouseout",
+							function () {
+								if (
+									selectedKey ===
+									null
+								) {
+									highlightLine(
+										null
+									);
 
-					// Reset selection on document / body click
-					d3.select("body").on(`click.multi-line-${uid}`, function (event) {
-						const isLegend = event.target.closest && event.target.closest(`#chart-header-legend-${uid}`);
-						if (!isLegend) {
-							selectedKey = null;
-							highlightLine(null);
-							tooltip.style("visibility", "hidden");
-						}
-					});
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								}
+							}
+						)
+						.on(
+							"click",
+							function (
+								event,
+								key
+							) {
+								event.stopPropagation();
 
-					// Vertical hover line overlay for X-axis data inspection
-					const hoverOverlayGroup = svg
-						.append("g")
-						.attr("class", "hover-overlay-group");
+								if (
+									selectedKey ===
+									key
+								) {
+									selectedKey =
+										null;
 
-					const verticalHoverLine = hoverOverlayGroup
-						.append("line")
-						.attr("y1", 0)
-						.attr("y2", activeHeight)
-						.attr("stroke", "#888")
-						.attr("stroke-width", 1.5)
-						.attr("stroke-dasharray", "4 4")
-						.style("pointer-events", "none")
-						.style("visibility", "hidden");
+									highlightLine(
+										null
+									);
 
-					const hoverDots = hoverOverlayGroup
-						.selectAll(".hover-dot")
-						.data(sortedKeys)
-						.enter()
-						.append("circle")
-						.attr("class", "hover-dot")
-						.attr("r", 4.5)
-						.attr("fill", function (key) {
-							return seriesColorMap.get(key);
-						})
-						.attr("stroke", "#fff")
-						.attr("stroke-width", 1.5)
-						.style("pointer-events", "none")
-						.style("visibility", "hidden");
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								} else {
+									selectedKey =
+										key;
 
-					const overlayRect = hoverOverlayGroup
-						.append("rect")
-						.attr("width", activeWidth)
-						.attr("height", activeHeight)
-						.attr("fill", "transparent")
-						.style("cursor", "crosshair");
+									highlightLine(
+										key
+									);
+
+									const desc =
+										currentDescriptions[
+										key
+										] || null;
+
+									const mainTxt =
+										`<strong>Label:</strong> ${key}`;
+
+									tooltip
+										.html(
+											formatTooltipContent(
+												mainTxt,
+												desc
+											)
+										)
+										.style(
+											"visibility",
+											"visible"
+										)
+										.style(
+											"top",
+											`${event.pageY + 10}px`
+										)
+										.style(
+											"left",
+											`${event.pageX + 10}px`
+										);
+								}
+							}
+						);
+
+					d3
+						.select(
+							"body"
+						)
+						.on(
+							`click.multi-line-${uid}`,
+							function (
+								event
+							) {
+								const isLegend =
+									event.target
+										.closest &&
+									event.target.closest(
+										`#chart-header-legend-${uid}`
+									);
+
+								if (
+									!isLegend
+								) {
+									selectedKey =
+										null;
+
+									highlightLine(
+										null
+									);
+
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								}
+							}
+						);
+
+					const hoverOverlayGroup =
+						svg
+							.append(
+								"g"
+							)
+							.attr(
+								"class",
+								"hover-overlay-group"
+							);
+
+					const verticalHoverLine =
+						hoverOverlayGroup
+							.append(
+								"line"
+							)
+							.attr(
+								"y1",
+								0
+							)
+							.attr(
+								"y2",
+								activeHeight
+							)
+							.attr(
+								"stroke",
+								"#888"
+							)
+							.attr(
+								"stroke-width",
+								1.5
+							)
+							.attr(
+								"stroke-dasharray",
+								"4 4"
+							)
+							.style(
+								"pointer-events",
+								"none"
+							)
+							.style(
+								"visibility",
+								"hidden"
+							);
+
+					const hoverDots =
+						hoverOverlayGroup
+							.selectAll(
+								".hover-dot"
+							)
+							.data(
+								sortedKeys
+							)
+							.enter()
+							.append(
+								"circle"
+							)
+							.attr(
+								"class",
+								"hover-dot"
+							)
+							.attr(
+								"r",
+								4.5
+							)
+							.attr(
+								"fill",
+								function (
+									key
+								) {
+									return seriesColorMap.get(
+										key
+									);
+								}
+							)
+							.attr(
+								"stroke",
+								"#fff"
+							)
+							.attr(
+								"stroke-width",
+								1.5
+							)
+							.style(
+								"pointer-events",
+								"none"
+							)
+							.style(
+								"visibility",
+								"hidden"
+							);
+
+					const overlayRect =
+						hoverOverlayGroup
+							.append(
+								"rect"
+							)
+							.attr(
+								"width",
+								activeWidth
+							)
+							.attr(
+								"height",
+								activeHeight
+							)
+							.attr(
+								"fill",
+								"transparent"
+							)
+							.style(
+								"cursor",
+								"crosshair"
+							);
 
 					overlayRect
-						.on("mousemove", function (event) {
-							if (selectedKey !== null) return; // Prioritize individual selected line
-
-							const [mouseX] = d3.pointer(event, this);
-							// Find closest category x position
-							let closestRow = data[0];
-							let minDistance = Infinity;
-
-							data.forEach(function (row) {
-								const cx = xScale(String(row[categoryKey]));
-								const dist = Math.abs(mouseX - cx);
-								if (dist < minDistance) {
-									minDistance = dist;
-									closestRow = row;
+						.on(
+							"mousemove",
+							function (
+								event
+							) {
+								if (
+									selectedKey !==
+									null
+								) {
+									return;
 								}
-							});
 
-							const cx = xScale(String(closestRow[categoryKey]));
-							verticalHoverLine
-								.attr("x1", cx)
-								.attr("x2", cx)
-								.style("visibility", "visible");
+								const [
+									mouseX
+								] =
+									d3.pointer(
+										event,
+										this
+									);
 
-							hoverDots
-								.attr("cx", cx)
-								.attr("cy", function (key) {
-									return yScale(closestRow[key] || 0);
-								})
-								.style("visibility", "visible");
+								let closestRow =
+									data[0];
 
-							let listItems = sortedKeys.map(function (key) {
-								const color = seriesColorMap.get(key);
-								const val = closestRow[key] !== undefined ? closestRow[key] : 0;
-								return `<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:3px;">
-                                    <span style="display:flex; align-items:center; gap:6px;">
-                                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:${color};"></span>
-                                        <span>${key}</span>
-                                    </span>
-                                    <strong>${val}</strong>
-                                </div>`;
-							}).join("");
+								let minDistance =
+									Infinity;
 
-							const mainTxt = `<div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #555; padding-bottom:4px;">${closestRow[categoryKey]}</div>${listItems}`;
+								data.forEach(
+									function (
+										row
+									) {
+										const cx =
+											xScale(
+												String(
+													row[
+													categoryKey
+													]
+												)
+											);
 
-							tooltip
-								.html(formatTooltipContent(mainTxt, null))
-								.style("visibility", "visible")
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
-						})
-						.on("mouseout", function () {
-							if (selectedKey !== null) return;
-							verticalHoverLine.style("visibility", "hidden");
-							hoverDots.style("visibility", "hidden");
-							tooltip.style("visibility", "hidden");
-						});
+										const dist =
+											Math.abs(
+												mouseX -
+												cx
+											);
+
+										if (
+											dist <
+											minDistance
+										) {
+											minDistance =
+												dist;
+
+											closestRow =
+												row;
+										}
+									}
+								);
+
+								const cx =
+									xScale(
+										String(
+											closestRow[
+											categoryKey
+											]
+										)
+									);
+
+								verticalHoverLine
+									.attr(
+										"x1",
+										cx
+									)
+									.attr(
+										"x2",
+										cx
+									)
+									.style(
+										"visibility",
+										"visible"
+									);
+
+								hoverDots
+									.attr(
+										"cx",
+										cx
+									)
+									.attr(
+										"cy",
+										function (
+											key
+										) {
+											return yScale(
+												closestRow[
+												key
+												] || 0
+											);
+										}
+									)
+									.style(
+										"visibility",
+										"visible"
+									);
+
+								const listItems =
+									sortedKeys
+										.map(
+											function (
+												key
+											) {
+												const color =
+													seriesColorMap.get(
+														key
+													);
+
+												const val =
+													closestRow[
+														key
+													] !==
+														undefined
+														? closestRow[
+														key
+														]
+														: 0;
+
+												return `<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:3px;">
+                                                    <span style="display:flex; align-items:center; gap:6px;">
+                                                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:${color};"></span>
+                                                        <span>${key}</span>
+                                                    </span>
+                                                    <strong>${val}</strong>
+                                                </div>`;
+											}
+										)
+										.join(
+											""
+										);
+
+								const mainTxt =
+									`<div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #555; padding-bottom:4px;">${closestRow[categoryKey]}</div>${listItems}`;
+
+								tooltip
+									.html(
+										formatTooltipContent(
+											mainTxt,
+											null
+										)
+									)
+									.style(
+										"visibility",
+										"visible"
+									)
+									.style(
+										"top",
+										`${event.pageY + 10}px`
+									)
+									.style(
+										"left",
+										`${event.pageX + 10}px`
+									);
+							}
+						)
+						.on(
+							"mouseout",
+							function () {
+								if (
+									selectedKey !==
+									null
+								) {
+									return;
+								}
+
+								verticalHoverLine.style(
+									"visibility",
+									"hidden"
+								);
+
+								hoverDots.style(
+									"visibility",
+									"hidden"
+								);
+
+								tooltip.style(
+									"visibility",
+									"hidden"
+								);
+							}
+						);
 				}
 
 				// =====================================================
 				// STACKED AREA CHART
 				// =====================================================
 
-				else if (activeType === "stacked-area") {
-					const stack = d3
-						.stack()
-						.keys(sortedKeys)
-						.order(d3.stackOrderNone)
-						.offset(d3.stackOffsetNone);
+				else if (
+					activeType ===
+					"stacked-area"
+				) {
+					const stack =
+						d3
+							.stack()
+							.keys(
+								sortedKeys
+							)
+							.order(
+								d3.stackOrderNone
+							)
+							.offset(
+								d3.stackOffsetNone
+							);
 
-					const seriesData = stack(data);
+					const seriesData =
+						stack(
+							data
+						);
 
-					const maxStackedVal = d3.max(seriesData, function (layer) {
-						return d3.max(layer, function (d) {
-							return d[1];
-						});
-					}) || 10;
+					const maxStackedVal =
+						d3.max(
+							seriesData,
+							function (
+								layer
+							) {
+								return d3.max(
+									layer,
+									function (
+										d
+									) {
+										return d[1];
+									}
+								);
+							}
+						) || 10;
 
-					const yScale = d3
-						.scaleLinear()
-						.domain([0, maxStackedVal * 1.05])
-						.nice()
-						.range([activeHeight, 0]);
+					const yScale =
+						d3
+							.scaleLinear()
+							.domain([
+								0,
+								maxStackedVal *
+								1.05
+							])
+							.nice()
+							.range([
+								activeHeight,
+								0
+							]);
 
-					// Y-axis gridlines
-					const yAxis = d3
-						.axisLeft(yScale)
-						.ticks(6)
-						.tickSize(-activeWidth);
+					const yAxis =
+						d3
+							.axisLeft(
+								yScale
+							)
+							.ticks(
+								6
+							)
+							.tickSize(
+								-activeWidth
+							);
 
 					yAxisGroup
-						.call(yAxis)
-						.call(function (g) {
-							g.select(".domain").remove();
-							g.selectAll(".tick line")
-								.attr("stroke", "#e5e5e5")
-								.attr("stroke-dasharray", null);
-							g.selectAll(".tick text")
-								.style("font-family", activeFont)
-								.style("font-size", tickSize)
-								.style("fill", "#545454");
-						});
+						.call(
+							yAxis
+						)
+						.call(
+							function (
+								g
+							) {
+								g
+									.select(
+										".domain"
+									)
+									.remove();
 
-					// X-axis line
-					const xAxis = d3.axisBottom(xScale);
+								g
+									.selectAll(
+										".tick line"
+									)
+									.attr(
+										"stroke",
+										"#e5e5e5"
+									)
+									.attr(
+										"stroke-dasharray",
+										null
+									);
+
+								g
+									.selectAll(
+										".tick text"
+									)
+									.style(
+										"font-family",
+										activeFont
+									)
+									.style(
+										"font-size",
+										tickSize
+									)
+									.style(
+										"fill",
+										"#545454"
+									);
+							}
+						);
+
+					const xAxis =
+						d3.axisBottom(
+							xScale
+						);
 
 					xAxisGroup
-						.call(xAxis)
-						.call(function (g) {
-							g.select(".domain")
-								.attr("stroke", "#ccc")
-								.attr("stroke-width", 1);
-							g.selectAll(".tick line").remove();
-							g.selectAll(".tick text")
-								.style("font-family", activeFont)
-								.style("font-size", tickSize)
-								.style("fill", "#545454");
-						});
+						.call(
+							xAxis
+						)
+						.call(
+							function (
+								g
+							) {
+								g
+									.select(
+										".domain"
+									)
+									.attr(
+										"stroke",
+										"#ccc"
+									)
+									.attr(
+										"stroke-width",
+										1
+									);
 
-					const areaGenerator = d3
-						.area()
-						.x(function (d) {
-							return xScale(String(d.data[categoryKey]));
-						})
-						.y0(function (d) {
-							return yScale(d[0]);
-						})
-						.y1(function (d) {
-							return yScale(d[1]);
-						})
-						.curve(d3.curveLinear);
+								g
+									.selectAll(
+										".tick line"
+									)
+									.remove();
 
-					const areaPaths = svg
-						.selectAll(".stacked-area-path")
-						.data(seriesData)
-						.enter()
-						.append("path")
-						.attr("class", "stacked-area-path")
-						.attr("d", areaGenerator)
-						.attr("fill", function (layer) {
-							return seriesColorMap.get(layer.key);
-						})
-						.attr("opacity", 0.85)
-						.style("cursor", "pointer")
-						.style("transition", "opacity 0.2s ease");
-
-					// Interactive Area State
-					let selectedAreaKey = null;
-
-					function highlightArea(targetKey) {
-						areaPaths.each(function (layer) {
-							const path = d3.select(this);
-							if (targetKey === null || layer.key === targetKey) {
-								path.style("opacity", layer.key === targetKey ? 0.95 : 0.85);
-							} else {
-								path.style("opacity", 0.25);
+								g
+									.selectAll(
+										".tick text"
+									)
+									.style(
+										"font-family",
+										activeFont
+									)
+									.style(
+										"font-size",
+										tickSize
+									)
+									.style(
+										"fill",
+										"#545454"
+									);
 							}
-						});
+						);
 
-						headerLegend.selectAll(`.legend-item-${uid}`).each(function (key) {
-							const item = d3.select(this);
-							if (targetKey === null || key === targetKey) {
-								item.style("opacity", 1);
-							} else {
-								item.style("opacity", 0.3);
+					const areaGenerator =
+						d3
+							.area()
+							.x(
+								function (
+									d
+								) {
+									return xScale(
+										String(
+											d
+												.data[
+											categoryKey
+											]
+										)
+									);
+								}
+							)
+							.y0(
+								function (
+									d
+								) {
+									return yScale(
+										d[0]
+									);
+								}
+							)
+							.y1(
+								function (
+									d
+								) {
+									return yScale(
+										d[1]
+									);
+								}
+							)
+							.curve(
+								d3.curveLinear
+							);
+
+					const areaPaths =
+						svg
+							.selectAll(
+								".stacked-area-path"
+							)
+							.data(
+								seriesData
+							)
+							.enter()
+							.append(
+								"path"
+							)
+							.attr(
+								"class",
+								"stacked-area-path"
+							)
+							.attr(
+								"d",
+								areaGenerator
+							)
+							.attr(
+								"fill",
+								function (
+									layer
+								) {
+									return seriesColorMap.get(
+										layer.key
+									);
+								}
+							)
+							.attr(
+								"opacity",
+								0.85
+							)
+							.style(
+								"cursor",
+								"pointer"
+							)
+							.style(
+								"transition",
+								"opacity 0.2s ease"
+							);
+
+					let selectedAreaKey =
+						null;
+
+					function highlightArea(
+						targetKey
+					) {
+						areaPaths.each(
+							function (
+								layer
+							) {
+								const path =
+									d3.select(
+										this
+									);
+
+								if (
+									targetKey ===
+									null ||
+									layer.key ===
+									targetKey
+								) {
+									path.style(
+										"opacity",
+										layer.key ===
+											targetKey
+											? 0.95
+											: 0.85
+									);
+								} else {
+									path.style(
+										"opacity",
+										0.25
+									);
+								}
 							}
-						});
+						);
+
+						headerLegend
+							.selectAll(
+								`.legend-item-${uid}`
+							)
+							.each(
+								function (
+									key
+								) {
+									const item =
+										d3.select(
+											this
+										);
+
+									if (
+										targetKey ===
+										null ||
+										key ===
+										targetKey
+									) {
+										item.style(
+											"opacity",
+											1
+										);
+									} else {
+										item.style(
+											"opacity",
+											0.3
+										);
+									}
+								}
+							);
 					}
 
-					// Legend hover & click interactions (shows description tooltip)
-					headerLegend.selectAll(`.legend-item-${uid}`)
-						.on("mouseover", function (event, key) {
-							if (selectedAreaKey === null) {
-								highlightArea(key);
-							}
-							const desc = currentDescriptions[key] || null;
-							const mainTxt = `<strong>Label:</strong> ${key}`;
-							tooltip
-								.html(formatTooltipContent(mainTxt, desc))
-								.style("visibility", "visible");
-						})
-						.on("mousemove", function (event) {
-							tooltip
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
-						})
-						.on("mouseout", function () {
-							if (selectedAreaKey === null) {
-								highlightArea(null);
-								tooltip.style("visibility", "hidden");
-							}
-						})
-						.on("click", function (event, key) {
-							event.stopPropagation();
-							if (selectedAreaKey === key) {
-								selectedAreaKey = null;
-								highlightArea(null);
-								tooltip.style("visibility", "hidden");
-							} else {
-								selectedAreaKey = key;
-								highlightArea(key);
-								const desc = currentDescriptions[key] || null;
-								const mainTxt = `<strong>Label:</strong> ${key}`;
+					headerLegend
+						.selectAll(
+							`.legend-item-${uid}`
+						)
+						.on(
+							"mouseover",
+							function (
+								event,
+								key
+							) {
+								if (
+									selectedAreaKey ===
+									null
+								) {
+									highlightArea(
+										key
+									);
+								}
+
+								const desc =
+									currentDescriptions[
+									key
+									] || null;
+
+								const mainTxt =
+									`<strong>Label:</strong> ${key}`;
+
 								tooltip
-									.html(formatTooltipContent(mainTxt, desc))
-									.style("visibility", "visible")
-									.style("top", `${event.pageY + 10}px`)
-									.style("left", `${event.pageX + 10}px`);
+									.html(
+										formatTooltipContent(
+											mainTxt,
+											desc
+										)
+									)
+									.style(
+										"visibility",
+										"visible"
+									);
 							}
-						});
+						)
+						.on(
+							"mousemove",
+							function (
+								event
+							) {
+								tooltip
+									.style(
+										"top",
+										`${event.pageY + 10}px`
+									)
+									.style(
+										"left",
+										`${event.pageX + 10}px`
+									);
+							}
+						)
+						.on(
+							"mouseout",
+							function () {
+								if (
+									selectedAreaKey ===
+									null
+								) {
+									highlightArea(
+										null
+									);
 
-					// Reset selection on document / body click
-					d3.select("body").on(`click.stacked-area-${uid}`, function (event) {
-						const isLegend = event.target.closest && event.target.closest(`#chart-header-legend-${uid}`);
-						if (!isLegend) {
-							selectedAreaKey = null;
-							highlightArea(null);
-							tooltip.style("visibility", "hidden");
-						}
-					});
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								}
+							}
+						)
+						.on(
+							"click",
+							function (
+								event,
+								key
+							) {
+								event.stopPropagation();
 
-					// Vertical hover line overlay for X-axis data inspection
-					const hoverOverlayGroup = svg
-						.append("g")
-						.attr("class", "hover-overlay-group");
+								if (
+									selectedAreaKey ===
+									key
+								) {
+									selectedAreaKey =
+										null;
 
-					const verticalHoverLine = hoverOverlayGroup
-						.append("line")
-						.attr("y1", 0)
-						.attr("y2", activeHeight)
-						.attr("stroke", "#888")
-						.attr("stroke-width", 1.5)
-						.attr("stroke-dasharray", "4 4")
-						.style("pointer-events", "none")
-						.style("visibility", "hidden");
+									highlightArea(
+										null
+									);
 
-					const overlayRect = hoverOverlayGroup
-						.append("rect")
-						.attr("width", activeWidth)
-						.attr("height", activeHeight)
-						.attr("fill", "transparent")
-						.style("cursor", "crosshair");
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								} else {
+									selectedAreaKey =
+										key;
+
+									highlightArea(
+										key
+									);
+
+									const desc =
+										currentDescriptions[
+										key
+										] || null;
+
+									const mainTxt =
+										`<strong>Label:</strong> ${key}`;
+
+									tooltip
+										.html(
+											formatTooltipContent(
+												mainTxt,
+												desc
+											)
+										)
+										.style(
+											"visibility",
+											"visible"
+										)
+										.style(
+											"top",
+											`${event.pageY + 10}px`
+										)
+										.style(
+											"left",
+											`${event.pageX + 10}px`
+										);
+								}
+							}
+						);
+
+					d3
+						.select(
+							"body"
+						)
+						.on(
+							`click.stacked-area-${uid}`,
+							function (
+								event
+							) {
+								const isLegend =
+									event.target
+										.closest &&
+									event.target.closest(
+										`#chart-header-legend-${uid}`
+									);
+
+								if (
+									!isLegend
+								) {
+									selectedAreaKey =
+										null;
+
+									highlightArea(
+										null
+									);
+
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								}
+							}
+						);
+
+					const hoverOverlayGroup =
+						svg
+							.append(
+								"g"
+							)
+							.attr(
+								"class",
+								"hover-overlay-group"
+							);
+
+					const verticalHoverLine =
+						hoverOverlayGroup
+							.append(
+								"line"
+							)
+							.attr(
+								"y1",
+								0
+							)
+							.attr(
+								"y2",
+								activeHeight
+							)
+							.attr(
+								"stroke",
+								"#888"
+							)
+							.attr(
+								"stroke-width",
+								1.5
+							)
+							.attr(
+								"stroke-dasharray",
+								"4 4"
+							)
+							.style(
+								"pointer-events",
+								"none"
+							)
+							.style(
+								"visibility",
+								"hidden"
+							);
+
+					const overlayRect =
+						hoverOverlayGroup
+							.append(
+								"rect"
+							)
+							.attr(
+								"width",
+								activeWidth
+							)
+							.attr(
+								"height",
+								activeHeight
+							)
+							.attr(
+								"fill",
+								"transparent"
+							)
+							.style(
+								"cursor",
+								"crosshair"
+							);
 
 					overlayRect
-						.on("mousemove", function (event) {
-							if (selectedAreaKey !== null) return;
-
-							const [mouseX] = d3.pointer(event, this);
-							let closestRow = data[0];
-							let minDistance = Infinity;
-
-							data.forEach(function (row) {
-								const cx = xScale(String(row[categoryKey]));
-								const dist = Math.abs(mouseX - cx);
-								if (dist < minDistance) {
-									minDistance = dist;
-									closestRow = row;
+						.on(
+							"mousemove",
+							function (
+								event
+							) {
+								if (
+									selectedAreaKey !==
+									null
+								) {
+									return;
 								}
-							});
 
-							const cx = xScale(String(closestRow[categoryKey]));
-							verticalHoverLine
-								.attr("x1", cx)
-								.attr("x2", cx)
-								.style("visibility", "visible");
+								const [
+									mouseX
+								] =
+									d3.pointer(
+										event,
+										this
+									);
 
-							let listItems = sortedKeys.map(function (key) {
-								const color = seriesColorMap.get(key);
-								const val = closestRow[key] !== undefined ? closestRow[key] : 0;
-								return `<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:3px;">
-                                    <span style="display:flex; align-items:center; gap:6px;">
-                                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:${color};"></span>
-                                        <span>${key}</span>
-                                    </span>
-                                    <strong>${val}</strong>
-                                </div>`;
-							}).join("");
+								let closestRow =
+									data[0];
 
-							const mainTxt = `<div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #555; padding-bottom:4px;">${closestRow[categoryKey]}</div>${listItems}`;
+								let minDistance =
+									Infinity;
 
-							tooltip
-								.html(formatTooltipContent(mainTxt, null))
-								.style("visibility", "visible")
-								.style("top", `${event.pageY + 10}px`)
-								.style("left", `${event.pageX + 10}px`);
-						})
-						.on("mouseout", function () {
-							if (selectedAreaKey !== null) return;
-							verticalHoverLine.style("visibility", "hidden");
-							tooltip.style("visibility", "hidden");
-						});
+								data.forEach(
+									function (
+										row
+									) {
+										const cx =
+											xScale(
+												String(
+													row[
+													categoryKey
+													]
+												)
+											);
+
+										const dist =
+											Math.abs(
+												mouseX -
+												cx
+											);
+
+										if (
+											dist <
+											minDistance
+										) {
+											minDistance =
+												dist;
+
+											closestRow =
+												row;
+										}
+									}
+								);
+
+								const cx =
+									xScale(
+										String(
+											closestRow[
+											categoryKey
+											]
+										)
+									);
+
+								verticalHoverLine
+									.attr(
+										"x1",
+										cx
+									)
+									.attr(
+										"x2",
+										cx
+									)
+									.style(
+										"visibility",
+										"visible"
+									);
+
+								const listItems =
+									sortedKeys
+										.map(
+											function (
+												key
+											) {
+												const color =
+													seriesColorMap.get(
+														key
+													);
+
+												const val =
+													closestRow[
+														key
+													] !==
+														undefined
+														? closestRow[
+														key
+														]
+														: 0;
+
+												return `<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:3px;">
+                                                    <span style="display:flex; align-items:center; gap:6px;">
+                                                        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:${color};"></span>
+                                                        <span>${key}</span>
+                                                    </span>
+                                                    <strong>${val}</strong>
+                                                </div>`;
+											}
+										)
+										.join(
+											""
+										);
+
+								const mainTxt =
+									`<div style="font-weight:bold; margin-bottom:6px; border-bottom:1px solid #555; padding-bottom:4px;">${closestRow[categoryKey]}</div>${listItems}`;
+
+								tooltip
+									.html(
+										formatTooltipContent(
+											mainTxt,
+											null
+										)
+									)
+									.style(
+										"visibility",
+										"visible"
+									)
+									.style(
+										"top",
+										`${event.pageY + 10}px`
+									)
+									.style(
+										"left",
+										`${event.pageX + 10}px`
+									);
+							}
+						)
+						.on(
+							"mouseout",
+							function () {
+								if (
+									selectedAreaKey !==
+									null
+								) {
+									return;
+								}
+
+								verticalHoverLine.style(
+									"visibility",
+									"hidden"
+								);
+
+								tooltip.style(
+									"visibility",
+									"hidden"
+								);
+							}
+						);
 				}
 			}
 
@@ -3180,323 +5759,1091 @@ document.addEventListener('DOMContentLoaded', function () {
 			// HEATMAP CHART
 			// =====================================================
 
-			// =====================================================
-			// HEATMAP CHART
-			// =====================================================
+			if (
+				activeType ===
+				"heatmap"
+			) {
+				svgOuter.style(
+					"display",
+					"none"
+				);
 
-			if (activeType === "heatmap") {
-				svgOuter.style("display", "none");
+				const heatmapWrapper =
+					contentRow
+						.append(
+							"div"
+						)
+						.attr(
+							"class",
+							`heatmap-container-${uid}`
+						)
+						.style(
+							"width",
+							"100%"
+						)
+						.style(
+							"display",
+							"flex"
+						)
+						.style(
+							"flex-direction",
+							"column"
+						)
+						.style(
+							"font-family",
+							activeFont
+						)
+						.style(
+							"box-sizing",
+							"border-box"
+						);
 
-				const heatmapWrapper = contentRow
-					.append("div")
-					.attr("class", `heatmap-container-${uid}`)
-					.style("width", "100%")
-					.style("display", "flex")
-					.style("flex-direction", "column")
-					.style("font-family", activeFont)
-					.style("box-sizing", "border-box");
+				const descriptionColKey =
+					categoryKey;
 
-				// Identify Heatmap Columns
-				// The CSV header row uses: description (full text), CPC (short code), ...companies..., TOTAL
-				// - descriptionColKey: the categoryKey / first col (full description text, shown only in tooltip)
-				// - cpcDisplayKey: the column named "CPC" (short code, shown in first table column)
-				// - companyColKeys: numeric value columns between CPC and TOTAL
-				// - totalColKey: column named TOTAL (last numeric col)
-				const descriptionColKey = categoryKey; // "description" column — tooltip only, not shown in table
-				const cpcDisplayKey = keys.find(k => k.toUpperCase() === "CPC") || keys[1] || keys[0];
-				const totalColKey = keys.find(k => k.toUpperCase() === "TOTAL") || valueKeys[valueKeys.length - 1] || "TOTAL";
-				// Company cols: numeric value keys, excluding Total, and excluding the CPC display column itself
-				const companyColKeys = valueKeys.filter(k => k !== totalColKey && k.toUpperCase() !== "CPC");
-
-				// Prepare row data according to cpcSortMode ("original", "asc", "desc")
-				let heatmapData = data.slice();
-				if (cpcSortMode === "asc") {
-					heatmapData.sort((a, b) => {
-						const valA = String(a[cpcDisplayKey] || "");
-						const valB = String(b[cpcDisplayKey] || "");
-						return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
-					});
-				} else if (cpcSortMode === "desc") {
-					heatmapData.sort((a, b) => {
-						const valA = String(a[cpcDisplayKey] || "");
-						const valB = String(b[cpcDisplayKey] || "");
-						return valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
-					});
-				}
-
-				// Calculate Color Interpolation scale & min/max for Companies
-				let maxCompanyVal = 0;
-				heatmapData.forEach(row => {
-					companyColKeys.forEach(ck => {
-						const val = parseFloat(row[ck]) || 0;
-						if (val > maxCompanyVal) maxCompanyVal = val;
-					});
-				});
-
-				// Blue color scale from light #ebf8ff (0/min) to dark blue #0c4a6e (max)
-				const minColor = d3.rgb("#ebf8ff");
-				const maxColor = d3.rgb("#0c4a6e");
-				const colorInterpolator = d3.interpolateRgb(minColor, maxColor);
-
-				function getCompanyCellColor(val) {
-					if (!maxCompanyVal || maxCompanyVal <= 0) return "#ebf8ff";
-					const ratio = Math.max(0, Math.min(1, val / maxCompanyVal));
-					return colorInterpolator(ratio);
-				}
-
-				// Max value for Total Column to scale horizontal bars
-				let maxTotalVal = 0;
-				heatmapData.forEach(row => {
-					const tot = parseFloat(row[totalColKey]) || 0;
-					if (tot > maxTotalVal) maxTotalVal = tot;
-				});
-
-				// Container for table — if > 10 rows, make scrollable with scrollbar on left
-				const tableScrollContainer = heatmapWrapper.append("div")
-					.attr("class", `heatmap-table-scroll-${uid}`)
-					.style("width", "100%");
-
-				if (heatmapData.length > 10) {
-					tableScrollContainer
-						.style("max-height", "380px")
-						.style("overflow-y", "auto")
-						.style("direction", "rtl"); // Moves scrollbar to left side
-				}
-
-				// Table element
-				const table = tableScrollContainer
-					.append("table")
-					.style("width", "100%")
-					.style("border-collapse", "collapse")
-					.style("table-layout", "auto")
-					.style("font-size", "13px")
-					.style("color", "#333")
-					.style("direction", "ltr"); // Resets text content direction to normal LTR inside table
-
-				// Header Row
-				const thead = table.append("thead");
-				const headerTr = thead.append("tr");
-
-				// Sticky table header when container is scrollable
-				if (heatmapData.length > 10) {
-					thead.style("position", "sticky")
-						.style("top", "0")
-						.style("z-index", "2")
-						.style("background-color", "#ffffff");
-				}
-
-				// Collect display header columns: [CPC code col, ...companyColKeys, Total]
-				const headerColumns = [cpcDisplayKey, ...companyColKeys, totalColKey];
-
-				headerColumns.forEach((colName, colIdx) => {
-					const th = headerTr.append("th")
-						.style("font-weight", "bold")
-						.style("padding", "10px 12px")
-						.style("text-align", colIdx === 0 ? "left" : (colIdx === headerColumns.length - 1 ? "left" : "center"))
-						.style("border-left", "2px solid #063137")
-						.style("border-right", "2px solid #063137")
-						.style("border-bottom", "2px solid #063137")
-						.style("border-top", "none")
-						.style("background-color", "#ffffff");
-
-					if (colIdx === 0) {
-						// CPC Header with label & sort button
-						const thContainer = th.append("div")
-							.style("display", "flex")
-							.style("align-items", "center")
-							.style("gap", "6px");
-
-						thContainer.append("span").text(colName);
-
-						let sortIcon = "↕";
-						let sortTooltip = "Sort: Original order (Click to sort A-Z)";
-						if (cpcSortMode === "asc") {
-							sortIcon = "↑";
-							sortTooltip = "Sort: Alphabetical (A-Z) (Click to sort Z-A)";
-						} else if (cpcSortMode === "desc") {
-							sortIcon = "↓";
-							sortTooltip = "Sort: Alphabetical (Z-A) (Click to reset to Original)";
+				const cpcDisplayKey =
+					keys.find(
+						function (
+							k
+						) {
+							return (
+								k.toUpperCase() ===
+								"CPC"
+							);
 						}
+					) ||
+					keys[1] ||
+					keys[0];
 
-						const sortBtn = thContainer.append("button")
-							.attr("type", "button")
-							.attr("title", sortTooltip)
-							.text(sortIcon)
-							.style("cursor", "pointer")
-							.style("background", "#f0f0f0")
-							.style("border", "1px solid #ccc")
-							.style("border-radius", "3px")
-							.style("padding", "1px 5px")
-							.style("font-size", "11px")
-							.style("line-height", "1")
-							.style("margin-left", "4px");
+				const totalColKey =
+					keys.find(
+						function (
+							k
+						) {
+							return (
+								k.toUpperCase() ===
+								"TOTAL"
+							);
+						}
+					) ||
+					valueKeys[
+					valueKeys.length -
+					1
+					] ||
+					"TOTAL";
 
-						sortBtn.on("click", function (event) {
-							event.stopPropagation();
-							if (cpcSortMode === "original") {
-								cpcSortMode = "asc";
-							} else if (cpcSortMode === "asc") {
-								cpcSortMode = "desc";
-							} else {
-								cpcSortMode = "original";
+				const companyColKeys =
+					valueKeys.filter(
+						function (
+							k
+						) {
+							return (
+								k !==
+								totalColKey &&
+								k.toUpperCase() !==
+								"CPC"
+							);
+						}
+					);
+
+				let heatmapData =
+					data.slice();
+
+				if (
+					cpcSortMode ===
+					"asc"
+				) {
+					heatmapData.sort(
+						function (
+							a,
+							b
+						) {
+							const valA =
+								String(
+									a[
+									cpcDisplayKey
+									] || ""
+								);
+
+							const valB =
+								String(
+									b[
+									cpcDisplayKey
+									] || ""
+								);
+
+							return valA.localeCompare(
+								valB,
+								undefined,
+								{
+									numeric:
+										true,
+									sensitivity:
+										"base"
+								}
+							);
+						}
+					);
+				} else if (
+					cpcSortMode ===
+					"desc"
+				) {
+					heatmapData.sort(
+						function (
+							a,
+							b
+						) {
+							const valA =
+								String(
+									a[
+									cpcDisplayKey
+									] || ""
+								);
+
+							const valB =
+								String(
+									b[
+									cpcDisplayKey
+									] || ""
+								);
+
+							return valB.localeCompare(
+								valA,
+								undefined,
+								{
+									numeric:
+										true,
+									sensitivity:
+										"base"
+								}
+							);
+						}
+					);
+				}
+
+				let maxCompanyVal =
+					0;
+
+				heatmapData.forEach(
+					function (
+						row
+					) {
+						companyColKeys.forEach(
+							function (
+								ck
+							) {
+								const val =
+									parseFloat(
+										row[
+										ck
+										]
+									) || 0;
+
+								if (
+									val >
+									maxCompanyVal
+								) {
+									maxCompanyVal =
+										val;
+								}
 							}
-							renderChart(currentData);
-						});
-					} else {
-						th.text(colName);
+						);
 					}
-				});
+				);
 
-				// Table Body Rows
-				const tbody = table.append("tbody");
+				const minColor =
+					d3.rgb(
+						"#ebf8ff"
+					);
 
-				heatmapData.forEach((row, rowIdx) => {
-					const tr = tbody.append("tr");
-					const isLastRow = (rowIdx === heatmapData.length - 1);
-					const rowBorderBottom = isLastRow ? "2px solid #063137" : "none";
+				const maxColor =
+					d3.rgb(
+						"#0c4a6e"
+					);
 
-					// 1. CPC Cell — shows the short CPC code; description shown only in tooltip
-					const cpcCode = row[cpcDisplayKey] !== undefined ? String(row[cpcDisplayKey]) : "";
-					const cpcDescText = row[descriptionColKey] !== undefined ? String(row[descriptionColKey]) : "";
-					const cpcCell = tr.append("td")
-						.text(cpcCode)
-						.style("padding", "8px 12px")
-						.style("text-align", "left")
-						.style("border", "none")
-						.style("border-bottom", rowBorderBottom)
-						.style("font-weight", "normal")
-						.style("white-space", "nowrap")
-						.style("cursor", cpcDescText ? "help" : "default");
+				const colorInterpolator =
+					d3.interpolateRgb(
+						minColor,
+						maxColor
+					);
 
-					// CPC Tooltip Popup hover — show full description text
-					cpcCell
-						.on("mouseover", function (event) {
-							if (cpcDescText) {
-								tooltip
-									.html(formatTooltipContent(`<strong style="font-size:14px;">${cpcCode}</strong>`, cpcDescText))
-									.style("visibility", "visible");
+				function getCompanyCellColor(
+					val
+				) {
+					if (
+						!maxCompanyVal ||
+						maxCompanyVal <= 0
+					) {
+						return "#ebf8ff";
+					}
+
+					const ratio =
+						Math.max(
+							0,
+							Math.min(
+								1,
+								val /
+								maxCompanyVal
+							)
+						);
+
+					return colorInterpolator(
+						ratio
+					);
+				}
+
+				let maxTotalVal =
+					0;
+
+				heatmapData.forEach(
+					function (
+						row
+					) {
+						const tot =
+							parseFloat(
+								row[
+								totalColKey
+								]
+							) || 0;
+
+						if (
+							tot >
+							maxTotalVal
+						) {
+							maxTotalVal =
+								tot;
+						}
+					}
+				);
+
+				const tableScrollContainer =
+					heatmapWrapper
+						.append(
+							"div"
+						)
+						.attr(
+							"class",
+							`heatmap-table-scroll-${uid}`
+						)
+						.style(
+							"width",
+							"100%"
+						);
+
+				if (
+					heatmapData.length >
+					10
+				) {
+					tableScrollContainer
+						.style(
+							"max-height",
+							"380px"
+						)
+						.style(
+							"overflow-y",
+							"auto"
+						)
+						.style(
+							"direction",
+							"rtl"
+						);
+				}
+
+				const table =
+					tableScrollContainer
+						.append(
+							"table"
+						)
+						.style(
+							"width",
+							"100%"
+						)
+						.style(
+							"border-collapse",
+							"collapse"
+						)
+						.style(
+							"table-layout",
+							"auto"
+						)
+						.style(
+							"font-size",
+							"13px"
+						)
+						.style(
+							"color",
+							"#333"
+						)
+						.style(
+							"direction",
+							"ltr"
+						);
+
+				const thead =
+					table.append(
+						"thead"
+					);
+
+				const headerTr =
+					thead.append(
+						"tr"
+					);
+
+				if (
+					heatmapData.length >
+					10
+				) {
+					thead
+						.style(
+							"position",
+							"sticky"
+						)
+						.style(
+							"top",
+							"0"
+						)
+						.style(
+							"z-index",
+							"2"
+						)
+						.style(
+							"background-color",
+							"#ffffff"
+						);
+				}
+
+				const headerColumns = [
+					cpcDisplayKey,
+					...companyColKeys,
+					totalColKey
+				];
+
+				headerColumns.forEach(
+					function (
+						colName,
+						colIdx
+					) {
+						const th =
+							headerTr
+								.append(
+									"th"
+								)
+								.style(
+									"font-weight",
+									"bold"
+								)
+								.style(
+									"padding",
+									"10px 12px"
+								)
+								.style(
+									"text-align",
+									colIdx === 0
+										? "left"
+										: (
+											colIdx ===
+												headerColumns.length -
+												1
+												? "left"
+												: "center"
+										)
+								)
+								.style(
+									"border-left",
+									"2px solid #063137"
+								)
+								.style(
+									"border-right",
+									"2px solid #063137"
+								)
+								.style(
+									"border-bottom",
+									"2px solid #063137"
+								)
+								.style(
+									"border-top",
+									"none"
+								)
+								.style(
+									"background-color",
+									"#ffffff"
+								);
+
+						if (
+							colIdx === 0
+						) {
+							const thContainer =
+								th
+									.append(
+										"div"
+									)
+									.style(
+										"display",
+										"flex"
+									)
+									.style(
+										"align-items",
+										"center"
+									)
+									.style(
+										"gap",
+										"6px"
+									);
+
+							thContainer
+								.append(
+									"span"
+								)
+								.text(
+									colName
+								);
+
+							let sortIcon =
+								"↕";
+
+							let sortTooltip =
+								"Sort: Original order (Click to sort A-Z)";
+
+							if (
+								cpcSortMode ===
+								"asc"
+							) {
+								sortIcon =
+									"↑";
+
+								sortTooltip =
+									"Sort: Alphabetical (A-Z) (Click to sort Z-A)";
+							} else if (
+								cpcSortMode ===
+								"desc"
+							) {
+								sortIcon =
+									"↓";
+
+								sortTooltip =
+									"Sort: Alphabetical (Z-A) (Click to reset to Original)";
 							}
-						})
-						.on("mousemove", function (event) {
-							if (cpcDescText) {
-								tooltip
-									.style("top", `${event.pageY + 10}px`)
-									.style("left", `${event.pageX + 10}px`);
+
+							const sortBtn =
+								thContainer
+									.append(
+										"button"
+									)
+									.attr(
+										"type",
+										"button"
+									)
+									.attr(
+										"title",
+										sortTooltip
+									)
+									.text(
+										sortIcon
+									)
+									.style(
+										"cursor",
+										"pointer"
+									)
+									.style(
+										"background",
+										"#f0f0f0"
+									)
+									.style(
+										"border",
+										"1px solid #ccc"
+									)
+									.style(
+										"border-radius",
+										"3px"
+									)
+									.style(
+										"padding",
+										"1px 5px"
+									)
+									.style(
+										"font-size",
+										"11px"
+									)
+									.style(
+										"line-height",
+										"1"
+									)
+									.style(
+										"margin-left",
+										"4px"
+									);
+
+							sortBtn.on(
+								"click",
+								function (
+									event
+								) {
+									event.stopPropagation();
+
+									if (
+										cpcSortMode ===
+										"original"
+									) {
+										cpcSortMode =
+											"asc";
+									} else if (
+										cpcSortMode ===
+										"asc"
+									) {
+										cpcSortMode =
+											"desc";
+									} else {
+										cpcSortMode =
+											"original";
+									}
+
+									renderChart(
+										currentData
+									);
+								}
+							);
+						} else {
+							th.text(
+								colName
+							);
+						}
+					}
+				);
+
+				const tbody =
+					table.append(
+						"tbody"
+					);
+
+				heatmapData.forEach(
+					function (
+						row,
+						rowIdx
+					) {
+						const tr =
+							tbody.append(
+								"tr"
+							);
+
+						const isLastRow =
+							rowIdx ===
+							heatmapData.length -
+							1;
+
+						const rowBorderBottom =
+							isLastRow
+								? "2px solid #063137"
+								: "none";
+
+						const cpcCode =
+							row[
+								cpcDisplayKey
+							] !== undefined
+								? String(
+									row[
+									cpcDisplayKey
+									]
+								)
+								: "";
+
+						const cpcDescText =
+							row[
+								descriptionColKey
+							] !== undefined
+								? String(
+									row[
+									descriptionColKey
+									]
+								)
+								: "";
+
+						const cpcCell =
+							tr
+								.append(
+									"td"
+								)
+								.text(
+									cpcCode
+								)
+								.style(
+									"padding",
+									"8px 12px"
+								)
+								.style(
+									"text-align",
+									"left"
+								)
+								.style(
+									"border",
+									"none"
+								)
+								.style(
+									"border-bottom",
+									rowBorderBottom
+								)
+								.style(
+									"font-weight",
+									"normal"
+								)
+								.style(
+									"white-space",
+									"nowrap"
+								)
+								.style(
+									"cursor",
+									cpcDescText
+										? "help"
+										: "default"
+								);
+
+						cpcCell
+							.on(
+								"mouseover",
+								function () {
+									if (
+										cpcDescText
+									) {
+										tooltip
+											.html(
+												formatTooltipContent(
+													`<strong style="font-size:14px;">${cpcCode}</strong>`,
+													cpcDescText
+												)
+											)
+											.style(
+												"visibility",
+												"visible"
+											);
+									}
+								}
+							)
+							.on(
+								"mousemove",
+								function (
+									event
+								) {
+									if (
+										cpcDescText
+									) {
+										tooltip
+											.style(
+												"top",
+												`${event.pageY + 10}px`
+											)
+											.style(
+												"left",
+												`${event.pageX + 10}px`
+											);
+									}
+								}
+							)
+							.on(
+								"mouseout",
+								function () {
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								}
+							);
+
+						companyColKeys.forEach(
+							function (
+								colKey
+							) {
+								const cellVal =
+									row[
+										colKey
+									] !== undefined
+										? parseFloat(
+											row[
+											colKey
+											]
+										)
+										: 0;
+
+								const cpcLabel =
+									cpcCode;
+
+								const bgColor =
+									getCompanyCellColor(
+										cellVal
+									);
+
+								const companyCell =
+									tr
+										.append(
+											"td"
+										)
+										.style(
+											"background-color",
+											bgColor
+										)
+										.style(
+											"padding",
+											"8px 12px"
+										)
+										.style(
+											"text-align",
+											"center"
+										)
+										.style(
+											"border",
+											"none"
+										)
+										.style(
+											"border-bottom",
+											rowBorderBottom
+										);
+
+								companyCell
+									.on(
+										"mouseover",
+										function () {
+											const displayVal =
+												cellVal <=
+													1 &&
+													cellVal >
+													0
+													? cellVal *
+													100
+													: cellVal;
+
+											const formattedVal =
+												displayVal.toLocaleString(
+													undefined,
+													{
+														maximumFractionDigits:
+															2
+													}
+												) +
+												"%";
+
+											const mainContent =
+												`<div style="font-weight:bold; font-size:13px;">${cpcLabel} — ${colKey}</div>
+                                                <div style="margin-top:2px;">Value: <strong>${formattedVal}</strong></div>`;
+
+											tooltip
+												.html(
+													formatTooltipContent(
+														mainContent,
+														null
+													)
+												)
+												.style(
+													"visibility",
+													"visible"
+												);
+										}
+									)
+									.on(
+										"mousemove",
+										function (
+											event
+										) {
+											tooltip
+												.style(
+													"top",
+													`${event.pageY + 10}px`
+												)
+												.style(
+													"left",
+													`${event.pageX + 10}px`
+												);
+										}
+									)
+									.on(
+										"mouseout",
+										function () {
+											tooltip.style(
+												"visibility",
+												"hidden"
+											);
+										}
+									);
 							}
-						})
-						.on("mouseout", function () {
-							tooltip.style("visibility", "hidden");
-						});
+						);
 
-					// 2. Company Cells
-					companyColKeys.forEach(colKey => {
-						const cellVal = row[colKey] !== undefined ? parseFloat(row[colKey]) : 0;
-						const cpcLabel = cpcCode;
-						const bgColor = getCompanyCellColor(cellVal);
+						const totalVal =
+							row[
+								totalColKey
+							] !== undefined
+								? parseFloat(
+									row[
+									totalColKey
+									]
+								)
+								: 0;
 
-						const companyCell = tr.append("td")
-							.style("background-color", bgColor)
-							.style("padding", "8px 12px")
-							.style("text-align", "center")
-							.style("border", "none")
-							.style("border-bottom", rowBorderBottom);
+						const totalCell =
+							tr
+								.append(
+									"td"
+								)
+								.style(
+									"padding",
+									"8px 12px"
+								)
+								.style(
+									"text-align",
+									"left"
+								)
+								.style(
+									"border",
+									"none"
+								)
+								.style(
+									"border-bottom",
+									rowBorderBottom
+								)
+								.style(
+									"vertical-align",
+									"middle"
+								);
 
-						// Company Cell Tooltip Popup hover showing value as percentage
-						companyCell
-							.on("mouseover", function (event) {
-								const displayVal = (cellVal <= 1 && cellVal > 0) ? cellVal * 100 : cellVal;
-								const formattedVal = displayVal.toLocaleString(undefined, { maximumFractionDigits: 2 }) + "%";
-								const mainContent = `<div style="font-weight:bold; font-size:13px;">${cpcLabel} — ${colKey}</div>
-                                    <div style="margin-top:2px;">Value: <strong>${formattedVal}</strong></div>`;
-								tooltip
-									.html(formatTooltipContent(mainContent, null))
-									.style("visibility", "visible");
-							})
-							.on("mousemove", function (event) {
-								tooltip
-									.style("top", `${event.pageY + 10}px`)
-									.style("left", `${event.pageX + 10}px`);
-							})
-							.on("mouseout", function () {
-								tooltip.style("visibility", "hidden");
-							});
-					});
+						const barContainer =
+							totalCell
+								.append(
+									"div"
+								)
+								.style(
+									"display",
+									"flex"
+								)
+								.style(
+									"align-items",
+									"center"
+								)
+								.style(
+									"gap",
+									"8px"
+								)
+								.style(
+									"width",
+									"100%"
+								);
 
-					// 3. Total Cell with Horizontal Bar & Integer text to the right
-					const totalVal = row[totalColKey] !== undefined ? parseFloat(row[totalColKey]) : 0;
-					const totalCell = tr.append("td")
-						.style("padding", "8px 12px")
-						.style("text-align", "left")
-						.style("border", "none")
-						.style("border-bottom", rowBorderBottom)
-						.style("vertical-align", "middle");
+						const barWidthPercent =
+							maxTotalVal > 0
+								? Math.max(
+									1.5,
+									Math.min(
+										80,
+										(
+											totalVal /
+											maxTotalVal
+										) *
+										85
+									)
+								)
+								: 0;
 
-					const barContainer = totalCell.append("div")
-						.style("display", "flex")
-						.style("align-items", "center")
-						.style("gap", "8px")
-						.style("width", "100%");
+						barContainer
+							.append(
+								"div"
+							)
+							.style(
+								"height",
+								"14px"
+							)
+							.style(
+								"width",
+								`${barWidthPercent}%`
+							)
+							.style(
+								"background-color",
+								"#063137"
+							)
+							.style(
+								"border-radius",
+								"2px"
+							)
+							.style(
+								"flex-shrink",
+								"0"
+							);
 
-					// Bar length proportional to totalVal / maxTotalVal
-					const barWidthPercent = maxTotalVal > 0 ? Math.max(1.5, Math.min(80, (totalVal / maxTotalVal) * 85)) : 0;
+						barContainer
+							.append(
+								"span"
+							)
+							.text(
+								Math.round(
+									totalVal
+								).toLocaleString()
+							)
+							.style(
+								"font-weight",
+								"normal"
+							)
+							.style(
+								"font-size",
+								"12px"
+							)
+							.style(
+								"color",
+								"#333"
+							)
+							.style(
+								"white-space",
+								"nowrap"
+							);
+					}
+				);
 
-					barContainer.append("div")
-						.style("height", "14px")
-						.style("width", `${barWidthPercent}%`)
-						.style("background-color", "#063137")
-						.style("border-radius", "2px")
-						.style("flex-shrink", "0");
+				const maxPctVal =
+					maxCompanyVal <= 1 &&
+						maxCompanyVal > 0
+						? maxCompanyVal *
+						100
+						: maxCompanyVal;
 
-					barContainer.append("span")
-						.text(Math.round(totalVal).toLocaleString())
-						.style("font-weight", "normal")
-						.style("font-size", "12px")
-						.style("color", "#333")
-						.style("white-space", "nowrap");
-				});
+				const maxPctText =
+					`${Number(
+						maxPctVal.toFixed(
+							2
+						)
+					)}%`;
 
-				// Gradient Bar Legend below the table
-				const maxPctVal = maxCompanyVal <= 1 && maxCompanyVal > 0 ? maxCompanyVal * 100 : maxCompanyVal;
-				const maxPctText = `${Number(maxPctVal.toFixed(2))}%`;
-				const minPctText = "0%";
+				const minPctText =
+					"0%";
 
-				const legendWrapper = heatmapWrapper.append("div")
-					.style("display", "flex")
-					.style("flex-direction", "column")
-					.style("align-items", "center")
-					.style("margin-top", "25px")
-					.style("margin-bottom", "15px")
-					.style("width", "100%");
+				const legendWrapper =
+					heatmapWrapper
+						.append(
+							"div"
+						)
+						.style(
+							"display",
+							"flex"
+						)
+						.style(
+							"flex-direction",
+							"column"
+						)
+						.style(
+							"align-items",
+							"center"
+						)
+						.style(
+							"margin-top",
+							"25px"
+						)
+						.style(
+							"margin-bottom",
+							"15px"
+						)
+						.style(
+							"width",
+							"100%"
+						);
 
-				const gradientContainer = legendWrapper.append("div")
-					.style("display", "flex")
-					.style("flex-direction", "column")
-					.style("align-items", "stretch")
-					.style("width", "260px");
+				const gradientContainer =
+					legendWrapper
+						.append(
+							"div"
+						)
+						.style(
+							"display",
+							"flex"
+						)
+						.style(
+							"flex-direction",
+							"column"
+						)
+						.style(
+							"align-items",
+							"stretch"
+						)
+						.style(
+							"width",
+							"260px"
+						);
 
-				// Gradient Bar with left/right vertical lines — using the same blue scale as cells
-				const gradientBar = gradientContainer.append("div")
-					.style("height", "18px")
-					.style("width", "100%")
-					.style("background", "linear-gradient(to right, #ebf8ff, #0c4a6e)")
-					.style("border-left", "2px solid #0c4a6e")
-					.style("border-right", "2px solid #0c4a6e")
-					.style("box-sizing", "border-box");
+				gradientContainer
+					.append(
+						"div"
+					)
+					.style(
+						"height",
+						"18px"
+					)
+					.style(
+						"width",
+						"100%"
+					)
+					.style(
+						"background",
+						"linear-gradient(to right, #ebf8ff, #0c4a6e)"
+					)
+					.style(
+						"border-left",
+						"2px solid #0c4a6e"
+					)
+					.style(
+						"border-right",
+						"2px solid #0c4a6e"
+					)
+					.style(
+						"box-sizing",
+						"border-box"
+					);
 
-				// Percentage text below gradient bar
-				const percentRow = gradientContainer.append("div")
-					.style("display", "flex")
-					.style("justify-content", "space-between")
-					.style("margin-top", "4px")
-					.style("font-size", "12px")
-					.style("color", "#333")
-					.style("font-weight", "normal");
+				const percentRow =
+					gradientContainer
+						.append(
+							"div"
+						)
+						.style(
+							"display",
+							"flex"
+						)
+						.style(
+							"justify-content",
+							"space-between"
+						)
+						.style(
+							"margin-top",
+							"4px"
+						)
+						.style(
+							"font-size",
+							"12px"
+						)
+						.style(
+							"color",
+							"#333"
+						)
+						.style(
+							"font-weight",
+							"normal"
+						);
 
-				percentRow.append("span").text(minPctText);
-				percentRow.append("span").text(maxPctText);
+				percentRow
+					.append(
+						"span"
+					)
+					.text(
+						minPctText
+					);
+
+				percentRow
+					.append(
+						"span"
+					)
+					.text(
+						maxPctText
+					);
 			} else {
-				svgOuter.style("display", "block");
+				svgOuter.style(
+					"display",
+					"block"
+				);
 			}
+
+			// =====================================================
+			// LOGO
+			// =====================================================
 
 			logoRow
 				.selectAll("*")
@@ -3513,10 +6860,24 @@ document.addEventListener('DOMContentLoaded', function () {
 						)
 					);
 
-				const logoHeight = logoWidth * 0.35;
+				let logoHeight;
+
+				if (
+					selectedLogo ===
+					"parola logo only.png"
+				) {
+					logoHeight =
+						logoWidth;
+				} else {
+					logoHeight =
+						logoWidth *
+						0.35;
+				}
 
 				logoRow
-					.append("img")
+					.append(
+						"img"
+					)
 					.attr(
 						"src",
 						themeJsUrl +
@@ -3564,12 +6925,39 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 		);
 
-		let resizeTimer = null;
+		logoPicker.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		let resizeTimer =
+			null;
+
 		function handleWindowResize() {
-			if (resizeTimer) clearTimeout(resizeTimer);
-			resizeTimer = setTimeout(function () {
-				applyResponsiveScale();
-			}, 100);
+			if (
+				resizeTimer
+			) {
+				clearTimeout(
+					resizeTimer
+				);
+			}
+
+			resizeTimer =
+				setTimeout(
+					function () {
+						applyResponsiveScale();
+					},
+					100
+				);
 		}
 
 		window.addEventListener(
@@ -3595,10 +6983,14 @@ document.addEventListener('DOMContentLoaded', function () {
 					`#chart-error-message-${uid}`
 				);
 
-			if (errorDiv.empty()) {
+			if (
+				errorDiv.empty()
+			) {
 				errorDiv =
 					canvas
-						.append("div")
+						.append(
+							"div"
+						)
 						.attr(
 							"id",
 							`chart-error-message-${uid}`
@@ -3646,7 +7038,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					"border-radius",
 					"6px"
 				)
-				.text(message);
+				.text(
+					message
+				);
 		}
 
 		function hideErrorState() {
@@ -3655,7 +7049,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					`#chart-error-message-${uid}`
 				);
 
-			if (!errorDiv.empty()) {
+			if (
+				!errorDiv.empty()
+			) {
 				errorDiv.style(
 					"display",
 					"none"
@@ -3690,21 +7086,52 @@ document.addEventListener('DOMContentLoaded', function () {
 			}
 
 			const trimmedValue =
-				String(value).trim();
+				String(
+					value
+				).trim();
 
 			if (
-				trimmedValue === ""
+				trimmedValue ===
+				""
 			) {
 				return "";
 			}
 
-			if (!isNaN(Number(trimmedValue))) {
-				return Number(trimmedValue);
+			if (
+				!isNaN(
+					Number(
+						trimmedValue
+					)
+				)
+			) {
+				return Number(
+					trimmedValue
+				);
 			}
 
-			const cleanedNumeric = trimmedValue.replace(/,/g, "").replace(/%/g, "");
-			if (!isNaN(Number(cleanedNumeric)) && cleanedNumeric !== "") {
-				return Number(cleanedNumeric);
+			const cleanedNumeric =
+				trimmedValue
+					.replace(
+						/,/g,
+						""
+					)
+					.replace(
+						/%/g,
+						""
+					);
+
+			if (
+				!isNaN(
+					Number(
+						cleanedNumeric
+					)
+				) &&
+				cleanedNumeric !==
+				""
+			) {
+				return Number(
+					cleanedNumeric
+				);
 			}
 
 			return trimmedValue;
@@ -3724,7 +7151,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					}
 
 					return row.some(
-						function (cell) {
+						function (
+							cell
+						) {
 							return (
 								cell !==
 								null &&
@@ -3782,9 +7211,14 @@ document.addEventListener('DOMContentLoaded', function () {
 										);
 									}
 
-									currentTitle = "";
-									currentSubtitle = "";
-									currentDescriptions = {};
+									currentTitle =
+										"";
+
+									currentSubtitle =
+										"";
+
+									currentDescriptions =
+										{};
 
 									const firstCell =
 										String(
@@ -3882,13 +7316,42 @@ document.addEventListener('DOMContentLoaded', function () {
 												continue;
 											}
 
-											const rowTag = String(sourceRow[0] || "").trim().toLowerCase();
-											if (rowTag === "description") {
-												keys.forEach(function (key, columnIndex) {
-													if (columnIndex > 0 && sourceRow[columnIndex]) {
-														currentDescriptions[key] = String(sourceRow[columnIndex]).trim();
+											const rowTag =
+												String(
+													sourceRow[0] ||
+													""
+												)
+													.trim()
+													.toLowerCase();
+
+											if (
+												rowTag ===
+												"description"
+											) {
+												keys.forEach(
+													function (
+														key,
+														columnIndex
+													) {
+														if (
+															columnIndex >
+															0 &&
+															sourceRow[
+															columnIndex
+															]
+														) {
+															currentDescriptions[
+																key
+															] =
+																String(
+																	sourceRow[
+																	columnIndex
+																	]
+																).trim();
+														}
 													}
-												});
+												);
+
 												continue;
 											}
 
@@ -3916,12 +7379,6 @@ document.addEventListener('DOMContentLoaded', function () {
 											);
 										}
 									} else {
-										currentTitle =
-											"";
-
-										currentSubtitle =
-											"";
-
 										const keys =
 											rawData[0].map(
 												function (
@@ -3961,13 +7418,42 @@ document.addEventListener('DOMContentLoaded', function () {
 												continue;
 											}
 
-											const rowTag = String(sourceRow[0] || "").trim().toLowerCase();
-											if (rowTag === "description") {
-												keys.forEach(function (key, columnIndex) {
-													if (columnIndex > 0 && sourceRow[columnIndex]) {
-														currentDescriptions[key] = String(sourceRow[columnIndex]).trim();
+											const rowTag =
+												String(
+													sourceRow[0] ||
+													""
+												)
+													.trim()
+													.toLowerCase();
+
+											if (
+												rowTag ===
+												"description"
+											) {
+												keys.forEach(
+													function (
+														key,
+														columnIndex
+													) {
+														if (
+															columnIndex >
+															0 &&
+															sourceRow[
+															columnIndex
+															]
+														) {
+															currentDescriptions[
+																key
+															] =
+																String(
+																	sourceRow[
+																	columnIndex
+																	]
+																).trim();
+														}
 													}
-												});
+												);
+
 												continue;
 											}
 
@@ -3996,7 +7482,6 @@ document.addEventListener('DOMContentLoaded', function () {
 										}
 									}
 
-									// Remove rows without a category value.
 									if (
 										parsedData.length >
 										0
@@ -4006,11 +7491,32 @@ document.addEventListener('DOMContentLoaded', function () {
 												function (
 													row
 												) {
-													const rowKeys = Object.keys(row);
-													return rowKeys.some(function (k) {
-														const val = row[k];
-														return val !== null && val !== undefined && String(val).trim() !== "";
-													});
+													const rowKeys =
+														Object.keys(
+															row
+														);
+
+													return rowKeys.some(
+														function (
+															k
+														) {
+															const val =
+																row[
+																k
+																];
+
+															return (
+																val !==
+																null &&
+																val !==
+																undefined &&
+																String(
+																	val
+																).trim() !==
+																""
+															);
+														}
+													);
 												}
 											);
 									}
@@ -4076,51 +7582,82 @@ document.addEventListener('DOMContentLoaded', function () {
 		// CSV FILE INPUT
 		// =========================================================
 
-		let csvHasLoaded = false;
+		let csvHasLoaded =
+			false;
 
-		fileInput.on("change", function (event) {
-			const inputElement = event.currentTarget || event.target;
-			const file = inputElement.files && inputElement.files[0];
+		fileInput.on(
+			"change",
+			function (
+				event
+			) {
+				const inputElement =
+					event.currentTarget ||
+					event.target;
 
-			if (!file) {
-				return;
+				const file =
+					inputElement.files &&
+					inputElement.files[0];
+
+				if (
+					!file
+				) {
+					return;
+				}
+
+				const reader =
+					new FileReader();
+
+				reader.onload =
+					function (
+						loadEvent
+					) {
+						csvHasLoaded =
+							true;
+
+						parseCSVAndRender(
+							loadEvent
+								.target
+								.result
+						);
+					};
+
+				reader.onerror =
+					function (
+						error
+					) {
+						console.error(
+							`Parola chart ${uid}: Unable to read CSV file.`,
+							error
+						);
+
+						displayErrorState(
+							"Tracking metrics update pending"
+						);
+					};
+
+				reader.readAsText(
+					file
+				);
 			}
-
-			const reader = new FileReader();
-
-			reader.onload = function (loadEvent) {
-				csvHasLoaded = true;
-
-				parseCSVAndRender(
-					loadEvent.target.result
-				);
-			};
-
-			reader.onerror = function (error) {
-				console.error(
-					`Parola chart ${uid}: Unable to read CSV file.`,
-					error
-				);
-
-				displayErrorState(
-					"Tracking metrics update pending"
-				);
-			};
-
-			reader.readAsText(file);
-		});
+		);
 
 		// =========================================================
 		// BACKEND CSV FALLBACK
 		// =========================================================
 
 		const backendCsvUrl =
-			canvas.attr("data-csv-url") ||
-			canvas.attr("data-source-file") ||
+			canvas.attr(
+				"data-csv-url"
+			) ||
+			canvas.attr(
+				"data-source-file"
+			) ||
 			"";
 
 		const backendCsvFilename =
-			canvas.attr("data-csv-filename") ||
+			canvas.attr(
+				"data-csv-filename"
+			) ||
 			"chart.csv";
 
 		function loadBackendCsv() {
@@ -4131,96 +7668,123 @@ document.addEventListener('DOMContentLoaded', function () {
 				return;
 			}
 
-			fetch(backendCsvUrl, {
-				credentials: "same-origin",
-				cache: "no-store"
-			})
-				.then(function (response) {
-					if (!response.ok) {
-						throw new Error(
-							`CSV request failed with status ${response.status}.`
-						);
-					}
-
-					return response.blob();
-				})
-				.then(function (blob) {
-					if (csvHasLoaded) {
-						return;
-					}
-
-					const csvFile = new File(
-						[blob],
-						backendCsvFilename,
-						{
-							type:
-								blob.type ||
-								"text/csv"
-						}
-					);
-
-					if (
-						typeof DataTransfer !==
-						"undefined"
+			fetch(
+				backendCsvUrl,
+				{
+					credentials:
+						"same-origin",
+					cache:
+						"no-store"
+				}
+			)
+				.then(
+					function (
+						response
 					) {
-						const transfer =
-							new DataTransfer();
+						if (
+							!response.ok
+						) {
+							throw new Error(
+								`CSV request failed with status ${response.status}.`
+							);
+						}
 
-						transfer.items.add(
+						return response.blob();
+					}
+				)
+				.then(
+					function (
+						blob
+					) {
+						if (
+							csvHasLoaded
+						) {
+							return;
+						}
+
+						const csvFile =
+							new File(
+								[
+									blob
+								],
+								backendCsvFilename,
+								{
+									type:
+										blob.type ||
+										"text/csv"
+								}
+							);
+
+						if (
+							typeof DataTransfer !==
+							"undefined"
+						) {
+							const transfer =
+								new DataTransfer();
+
+							transfer.items.add(
+								csvFile
+							);
+
+							const inputNode =
+								fileInput.node();
+
+							inputNode.files =
+								transfer.files;
+
+							inputNode.dispatchEvent(
+								new Event(
+									"change",
+									{
+										bubbles:
+											true
+									}
+								)
+							);
+
+							return;
+						}
+
+						const reader =
+							new FileReader();
+
+						reader.onload =
+							function (
+								loadEvent
+							) {
+								csvHasLoaded =
+									true;
+
+								parseCSVAndRender(
+									loadEvent
+										.target
+										.result
+								);
+							};
+
+						reader.readAsText(
 							csvFile
 						);
-
-						const inputNode =
-							fileInput.node();
-
-						inputNode.files =
-							transfer.files;
-
-						inputNode.dispatchEvent(
-							new Event(
-								"change",
-								{
-									bubbles: true
-								}
-							)
-						);
-
-						return;
 					}
-
-					const reader =
-						new FileReader();
-
-					reader.onload =
-						function (
-							loadEvent
-						) {
-							csvHasLoaded =
-								true;
-
-							parseCSVAndRender(
-								loadEvent
-									.target
-									.result
-							);
-						};
-
-					reader.readAsText(
-						csvFile
-					);
-				})
-				.catch(function (error) {
-					console.error(
-						`Parola chart ${uid}: Backend CSV could not be loaded.`,
+				)
+				.catch(
+					function (
 						error
-					);
-
-					if (!csvHasLoaded) {
-						displayErrorState(
-							"Tracking metrics update pending"
+					) {
+						console.error(
+							`Parola chart ${uid}: Backend CSV could not be loaded.`,
+							error
 						);
+
+						if (
+							!csvHasLoaded
+						) {
+							displayErrorState(
+								"Tracking metrics update pending"
+							);
+						}
 					}
-				});
+				);
 		}
 
 		window.setTimeout(
@@ -4228,4 +7792,88 @@ document.addEventListener('DOMContentLoaded', function () {
 			500
 		);
 	}
-});
+
+
+	// =========================================================
+	// PUBLIC INITIALIZER
+	// =========================================================
+
+	window.parolaInitializeCharts =
+		initializeParolaCharts;
+
+
+	// =========================================================
+	// START ENGINE
+	// =========================================================
+
+	function startParolaEngine() {
+
+		// Initialize charts already on the page.
+		initializeParolaCharts(
+			document
+		);
+
+
+		/*
+		 * Gutenberg creates and replaces preview nodes dynamically.
+		 * Observe the page for newly inserted charts.
+		 */
+		const observer =
+			new MutationObserver(
+				function (mutations) {
+
+					mutations.forEach(
+						function (mutation) {
+
+							mutation
+								.addedNodes
+								.forEach(
+									function (node) {
+
+										if (
+											node.nodeType !==
+											1
+										) {
+											return;
+										}
+
+										initializeParolaCharts(
+											node
+										);
+									}
+								);
+						}
+					);
+				}
+			);
+
+
+		observer.observe(
+			document.body,
+			{
+				childList:
+					true,
+
+				subtree:
+					true
+			}
+		);
+	}
+
+
+	if (
+		document.readyState ===
+		"loading"
+	) {
+
+		document.addEventListener(
+			"DOMContentLoaded",
+			startParolaEngine
+		);
+
+	} else {
+
+		startParolaEngine();
+	}
+
+})();
