@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.71 - "Applied August 27 Comments"
+ * 1.0.73 - "Applied August 27 Comments"
  */
 (function () {
 
