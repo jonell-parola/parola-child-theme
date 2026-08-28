@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.61 - "Fixed Issues"
+ * 1.0.73 - "Applied August 27 Comments"
  */
 (function () {
 
@@ -99,7 +99,7 @@
 
         const defaultLogoStyle =
             canvas.attr("logo-style") ||
-            "parola logo only.png";
+            "parola logo with text.png";
 
         const activeFont = "Inter";
 
@@ -129,8 +129,8 @@
                 "repeat(auto-fit, minmax(220px, 1fr))"
             )
             .style("gap", "15px");
-		
-		// Gutenberg already has its own block controls.
+
+        // Gutenberg already has its own block controls.
         // Hide the D3 frontend controls inside the live preview only.
         if (
             canvasNode.classList.contains(
@@ -211,7 +211,7 @@
         [
             {
                 value: "bar",
-                label: "Bar"
+                label: "Column"
             },
             {
                 value: "line",
@@ -223,15 +223,15 @@
             },
             {
                 value: "stacked-bar",
-                label: "Stacked Bar Chart"
+                label: "Stacked Column Chart"
             },
             {
                 value: "horizontal-bar",
-                label: "Horizontal Bar Chart"
+                label: "Bar"
             },
             {
                 value: "horizontal-stacked-bar",
-                label: "Horizontal Stacked Bar Chart"
+                label: "Stacked Bar Chart"
             },
             {
                 value: "multi-line",
@@ -278,14 +278,6 @@
             .style("padding", "4px");
 
         [
-            {
-                value: "parola logo only.png",
-                label: "Logo Only"
-            },
-            {
-                value: "parola logo all white.png",
-                label: "All White"
-            },
             {
                 value: "parola logo with text.png",
                 label: "Logo with Text"
@@ -401,7 +393,9 @@
             .style("display", "flex")
             .style("flex-direction", "column")
             .style("align-items", "flex-start")
-            .style("margin-bottom", "15px");
+            .style("margin-bottom", "15px")
+            .style("position", "relative")
+            .style("z-index", "10");
 
         const headerTitle = headerRow
             .append("div")
@@ -427,7 +421,9 @@
             .style("width", "100%")
             .style("justify-content", "center")
             .style("gap", "20px")
-            .style("margin-top", "10px");
+            .style("margin-top", "16px")
+            .style("position", "relative")
+            .style("z-index", "10");
 
         const contentRow = chartWrapper
             .append("div")
@@ -735,7 +731,8 @@
             activeType,
             valueKeys,
             tickSize,
-            seriesColorMap
+            seriesColorMap,
+            fontScale
         ) {
             const isHeaderType =
                 activeType === "stacked-bar" ||
@@ -763,7 +760,8 @@
                 "flex"
             );
 
-            const subtitleSize = "16px";
+            const currentFontScale = fontScale || 1;
+            const subtitleSize = `${Math.round(parseInt(mainTitleSize, 10) * (16 / 22))}px`;
 
             headerTitle
                 .text(mainTitleValue)
@@ -786,6 +784,18 @@
                     "font-size",
                     subtitleSize
                 );
+
+            if (activeType === "heatmap") {
+                headerSubtitle.style(
+                    "margin-bottom",
+                    `${Math.max(6, Math.round(12 * currentFontScale))}px`
+                );
+            } else {
+                headerSubtitle.style(
+                    "margin-bottom",
+                    "0px"
+                );
+            }
 
             if (activeType === "heatmap") {
                 headerLegend.style(
@@ -830,6 +840,28 @@
                 return fallbackColorScale(key);
             };
 
+            const marginTop = Math.round(32 * currentFontScale);
+            headerLegend.style("margin-top", `${marginTop}px`);
+
+            if (
+                activeType === "multi-line" ||
+                activeType === "stacked-area"
+            ) {
+                const legendMarginBottom = Math.round(48 * currentFontScale);
+                headerLegend.style("margin-bottom", `${legendMarginBottom}px`);
+                headerRow.style("margin-bottom", "0px");
+            } else if (activeType === "heatmap") {
+                headerLegend.style("margin-bottom", "0px");
+                headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
+            } else {
+                headerLegend.style("margin-bottom", "0px");
+                headerRow.style("margin-bottom", `${Math.round(-64 * currentFontScale)}px`);
+            }
+
+            const legendGap = Math.max(8, Math.round(20 * currentFontScale));
+            const dotSize = Math.max(6, Math.round(12 * currentFontScale));
+            const itemGap = Math.max(4, Math.round(6 * currentFontScale));
+
             headerLegend
                 .style(
                     "display",
@@ -842,6 +874,10 @@
                 .style(
                     "flex-wrap",
                     "wrap"
+                )
+                .style(
+                    "gap",
+                    `${legendGap}px`
                 );
 
             valueKeys.forEach(
@@ -864,7 +900,7 @@
                             )
                             .style(
                                 "gap",
-                                "6px"
+                                `${itemGap}px`
                             )
                             .style(
                                 "cursor",
@@ -880,11 +916,19 @@
                         .append("div")
                         .style(
                             "width",
-                            "12px"
+                            `${dotSize}px`
                         )
                         .style(
                             "height",
-                            "12px"
+                            `${dotSize}px`
+                        )
+                        .style(
+                            "min-width",
+                            `${dotSize}px`
+                        )
+                        .style(
+                            "min-height",
+                            `${dotSize}px`
                         )
                         .style(
                             "border-radius",
@@ -1044,16 +1088,20 @@
                 currentSubtitle ||
                 "Global Patent Trends";
 
-            const mainTitleSize = "22px";
-            const subtitleSize = "16px";
-            const tickSize = "13px";
-            const shapeTextSize = "14px";
-            const pieShapeTextSize = "12px";
+            const fontScale = Math.min(1, Math.max(0.55, containerWidth / 550));
+            const mainTitleSize = `${Math.round(22 * fontScale)}px`;
+            const subtitleSize = `${Math.round(16 * fontScale)}px`;
+            const tickSize = `${Math.round(13 * fontScale)}px`;
+            const shapeTextSize = `${Math.round(14 * fontScale)}px`;
+            const pieShapeTextSize = `${Math.round(12 * fontScale)}px`;
+
+            const svgTitleY = activeType === "line" ? -50 * fontScale : -40 * fontScale;
+            const svgSubtitleY = activeType === "line" ? -26 * fontScale : -18 * fontScale;
 
             mainTitleText
                 .text(mainTitleValue)
                 .attr("x", -margin.left)
-                .attr("y", -40)
+                .attr("y", svgTitleY)
                 .style(
                     "font-family",
                     activeFont
@@ -1066,7 +1114,7 @@
             subtitleText
                 .text(subtitleValue)
                 .attr("x", -margin.left)
-                .attr("y", -18)
+                .attr("y", svgSubtitleY)
                 .style(
                     "font-family",
                     activeFont
@@ -1187,7 +1235,9 @@
                 mainTitleSize,
                 activeType,
                 valueKeys,
-                tickSize
+                tickSize,
+                undefined,
+                fontScale
             );
 
             applyChartContainerStyles();
@@ -1282,7 +1332,7 @@
                 );
 
                 const outerMargin =
-                    60;
+                    30;
 
                 const radiusX =
                     Math.max(
@@ -1329,7 +1379,7 @@
                             function (row) {
                                 return (
                                     row[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 );
                             }
@@ -1373,12 +1423,12 @@
                             return (
                                 (
                                     b[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 ) -
                                 (
                                     a[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 )
                             );
@@ -1395,11 +1445,11 @@
                     ) {
                         colorMap.set(
                             row[
-                                categoryKey
+                            categoryKey
                             ],
                             PIE_COLORS[
-                                index %
-                                PIE_COLORS.length
+                            index %
+                            PIE_COLORS.length
                             ]
                         );
                     }
@@ -1438,7 +1488,7 @@
                         function (slice) {
                             return colorMap.get(
                                 slice.data[
-                                    categoryKey
+                                categoryKey
                                 ]
                             );
                         }
@@ -1485,7 +1535,7 @@
                             const desc =
                                 descriptionKey
                                     ? slice.data[
-                                        descriptionKey
+                                    descriptionKey
                                     ]
                                     : null;
 
@@ -1534,7 +1584,7 @@
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -1584,7 +1634,11 @@
                     )
                     .style(
                         "font-size",
-                        pieShapeTextSize
+                        tickSize
+                    )
+                    .style(
+                        "font-weight",
+                        "bold"
                     )
                     .style(
                         "fill",
@@ -1594,7 +1648,7 @@
                         function (slice) {
                             const value =
                                 slice.data[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0;
 
                             const percentage =
@@ -1745,7 +1799,7 @@
                         function (row) {
                             return String(
                                 row[
-                                    categoryKey
+                                categoryKey
                                 ]
                             );
                         }
@@ -1771,7 +1825,7 @@
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -1909,7 +1963,7 @@
                                 return xScale(
                                     String(
                                         d[
-                                            categoryKey
+                                        categoryKey
                                         ]
                                     )
                                 );
@@ -1919,7 +1973,7 @@
                             function (d) {
                                 return yScale(
                                     d[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 );
                             }
@@ -2092,7 +2146,7 @@
                                         xScale(
                                             String(
                                                 row[
-                                                    categoryKey
+                                                categoryKey
                                                 ]
                                             )
                                         );
@@ -2120,7 +2174,7 @@
                                 xScale(
                                     String(
                                         closestRow[
-                                            categoryKey
+                                        categoryKey
                                         ]
                                     )
                                 );
@@ -2128,7 +2182,7 @@
                             const cy =
                                 yScale(
                                     closestRow[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 );
 
@@ -2165,14 +2219,14 @@
                                     valueKeys[0]
                                 ] !== undefined
                                     ? closestRow[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ]
                                     : 0;
 
                             const desc =
                                 descriptionKey
                                     ? closestRow[
-                                        descriptionKey
+                                    descriptionKey
                                     ]
                                     : null;
 
@@ -2267,7 +2321,7 @@
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -2288,6 +2342,40 @@
                             0
                         ]);
 
+                // Render y-axis first to measure label widths, then remove it
+                yAxisGroup
+                    .call(
+                        d3.axisLeft(yScale)
+                            .ticks(5)
+                    )
+                    .selectAll("text")
+                    .style("font-family", activeFont)
+                    .style("font-size", tickSize);
+
+                let maxYLabelWidth = 0;
+                yAxisGroup.selectAll("text").each(function () {
+                    const bbox = this.getBBox();
+                    if (bbox.width > maxYLabelWidth) {
+                        maxYLabelWidth = bbox.width;
+                    }
+                });
+
+                yAxisGroup.selectAll("*").remove();
+
+                // Compute left offset from y-label widths, then update xScale range
+                const colExtraLeft = maxYLabelWidth > 0 ? maxYLabelWidth + 6 : 25;
+                const colActiveWidth = chartWidth - colExtraLeft - margin.right;
+
+                xScale.range([0, colActiveWidth]);
+
+                svg.attr("transform", `translate(${colExtraLeft},${margin.top})`);
+
+                // Align title/subtitle left edge with the first bar
+                const firstBarX = xScale(data[0][categoryKey]) || 0;
+                mainTitleText.attr("x", firstBarX);
+                subtitleText.attr("x", firstBarX);
+
+                // Now call x-axis AFTER xScale range is finalised so labels align with bars
                 xAxisGroup
                     .call(
                         d3.axisBottom(
@@ -2328,9 +2416,6 @@
                         tickSize
                     );
 
-                yAxisGroup
-                    .selectAll("*")
-                    .remove();
 
                 const barPaths =
                     svg
@@ -2367,14 +2452,14 @@
                                 const bx =
                                     xScale(
                                         row[
-                                            categoryKey
+                                        categoryKey
                                         ]
                                     );
 
                                 const by =
                                     yScale(
                                         row[
-                                            valueKeys[0]
+                                        valueKeys[0]
                                         ] || 0
                                     );
 
@@ -2444,7 +2529,7 @@
                                                 ".bar-label"
                                             )
                                             .nodes()[
-                                            idx
+                                        idx
                                         ]
                                     )
                                     .attr(
@@ -2467,7 +2552,7 @@
                                 const desc =
                                     descriptionKey
                                         ? row[
-                                            descriptionKey
+                                        descriptionKey
                                         ]
                                         : null;
 
@@ -2540,7 +2625,7 @@
                             return (
                                 xScale(
                                     row[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 xScale.bandwidth() /
@@ -2554,7 +2639,7 @@
                             return (
                                 yScale(
                                     row[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 ) - 5
                             );
@@ -2574,17 +2659,17 @@
                     )
                     .style(
                         "font-weight",
-                        "normal"
+                        "bold"
                     )
                     .style(
                         "font-size",
-                        shapeTextSize
+                        tickSize
                     )
                     .text(
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -2634,7 +2719,7 @@
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -2721,32 +2806,24 @@
                         }
                     );
 
-                const extraLeftMargin =
-                    Math.max(
-                        margin.left,
-                        maxYLabelWidth +
-                        15
-                    );
+                const hBarExtraLeft =
+                    maxYLabelWidth > 0
+                        ? maxYLabelWidth + 6
+                        : 25;
 
                 const dynamicActiveWidth =
                     chartWidth -
-                    extraLeftMargin -
+                    hBarExtraLeft -
                     margin.right;
 
                 svg.attr(
                     "transform",
-                    `translate(${extraLeftMargin},${margin.top})`
+                    `translate(${hBarExtraLeft},${margin.top})`
                 );
 
-                mainTitleText.attr(
-                    "x",
-                    -extraLeftMargin
-                );
-
-                subtitleText.attr(
-                    "x",
-                    -extraLeftMargin
-                );
+                // Align title/subtitle left edge with the leftmost y-axis label edge
+                mainTitleText.attr("x", -hBarExtraLeft);
+                subtitleText.attr("x", -hBarExtraLeft);
 
                 xScale.range([
                     0,
@@ -2791,14 +2868,14 @@
                                 const by =
                                     yScale(
                                         row[
-                                            categoryKey
+                                        categoryKey
                                         ]
                                     );
 
                                 const bw =
                                     xScale(
                                         row[
-                                            valueKeys[0]
+                                        valueKeys[0]
                                         ] || 0
                                     );
 
@@ -2864,7 +2941,7 @@
                                                 ".hbar-label"
                                             )
                                             .nodes()[
-                                            idx
+                                        idx
                                         ]
                                     )
                                     .attr(
@@ -2887,7 +2964,7 @@
                                 const desc =
                                     descriptionKey
                                         ? row[
-                                            descriptionKey
+                                        descriptionKey
                                         ]
                                         : null;
 
@@ -2960,7 +3037,7 @@
                             return (
                                 xScale(
                                     row[
-                                        valueKeys[0]
+                                    valueKeys[0]
                                     ] || 0
                                 ) + 6
                             );
@@ -2972,7 +3049,7 @@
                             return (
                                 yScale(
                                     row[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 yScale.bandwidth() /
@@ -2998,17 +3075,17 @@
                     )
                     .style(
                         "font-weight",
-                        "normal"
+                        "bold"
                     )
                     .style(
                         "font-size",
-                        shapeTextSize
+                        tickSize
                     )
                     .text(
                         function (row) {
                             return (
                                 row[
-                                    valueKeys[0]
+                                valueKeys[0]
                                 ] || 0
                             );
                         }
@@ -3082,7 +3159,7 @@
                                 function (key) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] || 0
                                     );
                                 }
@@ -3146,6 +3223,93 @@
                 yAxisGroup
                     .selectAll("*")
                     .remove();
+
+                yAxisGroup
+                    .call(
+                        d3.axisLeft(yScale)
+                            .ticks(5)
+                            .tickSize(-activeWidth)
+                    )
+                    .call(function (g) {
+                        g.select(".domain").remove();
+                        g.selectAll(".tick line")
+                            .attr("stroke", "#e5e7eb")
+                            .attr("stroke-dasharray", "3 3");
+                    })
+                    .selectAll("text")
+                    .style("font-family", activeFont)
+                    .style("font-size", tickSize);
+
+                let maxYLabelWidth = 0;
+                yAxisGroup.selectAll("text").each(function () {
+                    const bbox = this.getBBox();
+                    if (bbox.width > maxYLabelWidth) {
+                        maxYLabelWidth = bbox.width;
+                    }
+                });
+
+                const extraLeftMargin = maxYLabelWidth > 0 ? maxYLabelWidth + 6 : 25;
+                const dynamicActiveWidth = chartWidth - extraLeftMargin - margin.right;
+
+                svg.attr(
+                    "transform",
+                    `translate(${extraLeftMargin},${margin.top})`
+                );
+
+                xScale.range([0, dynamicActiveWidth]);
+
+                xAxisGroup
+                    .call(
+                        d3.axisBottom(
+                            xScale
+                        )
+                    )
+                    .call(
+                        function (
+                            group
+                        ) {
+                            group
+                                .select(
+                                    ".domain"
+                                )
+                                .remove();
+                        }
+                    )
+                    .call(
+                        function (
+                            group
+                        ) {
+                            group
+                                .selectAll(
+                                    ".tick line"
+                                )
+                                .remove();
+                        }
+                    )
+                    .selectAll(
+                        "text"
+                    )
+                    .style(
+                        "font-family",
+                        activeFont
+                    )
+                    .style(
+                        "font-size",
+                        tickSize
+                    );
+
+                yAxisGroup.call(
+                    d3.axisLeft(yScale)
+                        .ticks(5)
+                        .tickSize(-dynamicActiveWidth)
+                ).call(function (g) {
+                    g.select(".domain").remove();
+                    g.selectAll(".tick line")
+                        .attr("stroke", "#e5e7eb")
+                        .attr("stroke-dasharray", "3 3");
+                }).selectAll("text")
+                    .style("font-family", activeFont)
+                    .style("font-size", tickSize);
 
                 const stackedData =
                     d3
@@ -3256,7 +3420,7 @@
                                 xScale(
                                     segment
                                         .data[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 );
 
@@ -3345,7 +3509,7 @@
                                 descriptionKey
                                     ? segment
                                         .data[
-                                        descriptionKey
+                                    descriptionKey
                                     ]
                                     : null;
 
@@ -3388,122 +3552,6 @@
                         }
                     );
 
-                const stackLabels =
-                    mergedLayers
-                        .selectAll(
-                            ".stack-label"
-                        )
-                        .data(
-                            function (
-                                layer
-                            ) {
-                                return layer;
-                            }
-                        )
-                        .enter()
-                        .append(
-                            "text"
-                        )
-                        .attr(
-                            "class",
-                            "stack-label"
-                        )
-                        .attr(
-                            "x",
-                            function (
-                                segment
-                            ) {
-                                return (
-                                    xScale(
-                                        segment
-                                            .data[
-                                            categoryKey
-                                        ]
-                                    ) +
-                                    xScale.bandwidth() /
-                                    2
-                                );
-                            }
-                        )
-                        .attr(
-                            "y",
-                            function (
-                                segment
-                            ) {
-                                return (
-                                    yScale(
-                                        segment[1]
-                                    ) + 15
-                                );
-                            }
-                        )
-                        .attr(
-                            "text-anchor",
-                            "middle"
-                        )
-                        .attr(
-                            "fill",
-                            "#ffffff"
-                        )
-                        .style(
-                            "font-family",
-                            activeFont
-                        )
-                        .style(
-                            "font-size",
-                            shapeTextSize
-                        )
-                        .text(
-                            function (
-                                segment
-                            ) {
-                                const value =
-                                    segment[1] -
-                                    segment[0];
-
-                                return value > 0
-                                    ? value
-                                    : "";
-                            }
-                        );
-
-                stackLabels.each(
-                    function (
-                        segment
-                    ) {
-                        const label =
-                            d3.select(
-                                this
-                            );
-
-                        const segHeight =
-                            yScale(
-                                segment[0]
-                            ) -
-                            yScale(
-                                segment[1]
-                            );
-
-                        const segWidth =
-                            xScale.bandwidth();
-
-                        const bbox =
-                            this.getBBox();
-
-                        if (
-                            bbox.height >
-                            segHeight ||
-                            bbox.width >
-                            segWidth
-                        ) {
-                            label.style(
-                                "display",
-                                "none"
-                            );
-                        }
-                    }
-                );
-
                 svg
                     .selectAll(
                         ".total-label"
@@ -3525,7 +3573,7 @@
                             return (
                                 xScale(
                                     row[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 xScale.bandwidth() /
@@ -3544,7 +3592,7 @@
                                     ) {
                                         return (
                                             row[
-                                                key
+                                            key
                                             ] || 0
                                         );
                                     }
@@ -3586,7 +3634,7 @@
                                 ) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] || 0
                                     );
                                 }
@@ -3646,7 +3694,7 @@
                                 ) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] || 0
                                     );
                                 }
@@ -3734,11 +3782,9 @@
                     );
 
                 const extraLeftMargin =
-                    Math.max(
-                        margin.left,
-                        maxYLabelWidth +
-                        15
-                    );
+                    maxYLabelWidth > 0
+                        ? maxYLabelWidth + 6
+                        : 25;
 
                 const dynamicActiveWidth =
                     chartWidth -
@@ -3748,16 +3794,6 @@
                 svg.attr(
                     "transform",
                     `translate(${extraLeftMargin},${margin.top})`
-                );
-
-                mainTitleText.attr(
-                    "x",
-                    -extraLeftMargin
-                );
-
-                subtitleText.attr(
-                    "x",
-                    -extraLeftMargin
                 );
 
                 xScale.range([
@@ -3881,7 +3917,7 @@
                                 yScale(
                                     segment
                                         .data[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 );
 
@@ -3958,7 +3994,7 @@
                                 descriptionKey
                                     ? segment
                                         .data[
-                                        descriptionKey
+                                    descriptionKey
                                     ]
                                     : null;
 
@@ -4001,126 +4037,6 @@
                         }
                     );
 
-                const horizStackLabels =
-                    mergedLayers
-                        .selectAll(
-                            ".stack-label"
-                        )
-                        .data(
-                            function (
-                                layer
-                            ) {
-                                return layer;
-                            }
-                        )
-                        .enter()
-                        .append(
-                            "text"
-                        )
-                        .attr(
-                            "class",
-                            "stack-label"
-                        )
-                        .attr(
-                            "x",
-                            function (
-                                segment
-                            ) {
-                                return (
-                                    xScale(
-                                        segment[1]
-                                    ) - 8
-                                );
-                            }
-                        )
-                        .attr(
-                            "y",
-                            function (
-                                segment
-                            ) {
-                                return (
-                                    yScale(
-                                        segment
-                                            .data[
-                                            categoryKey
-                                        ]
-                                    ) +
-                                    yScale.bandwidth() /
-                                    2
-                                );
-                            }
-                        )
-                        .attr(
-                            "dy",
-                            "0.35em"
-                        )
-                        .attr(
-                            "text-anchor",
-                            "end"
-                        )
-                        .attr(
-                            "fill",
-                            "#ffffff"
-                        )
-                        .style(
-                            "font-family",
-                            activeFont
-                        )
-                        .style(
-                            "font-size",
-                            shapeTextSize
-                        )
-                        .text(
-                            function (
-                                segment
-                            ) {
-                                const value =
-                                    segment[1] -
-                                    segment[0];
-
-                                return value > 0
-                                    ? value
-                                    : "";
-                            }
-                        );
-
-                horizStackLabels.each(
-                    function (
-                        segment
-                    ) {
-                        const label =
-                            d3.select(
-                                this
-                            );
-
-                        const segWidth =
-                            xScale(
-                                segment[1]
-                            ) -
-                            xScale(
-                                segment[0]
-                            );
-
-                        const segHeight =
-                            yScale.bandwidth();
-
-                        const bbox =
-                            this.getBBox();
-
-                        if (
-                            bbox.width >
-                            segWidth ||
-                            bbox.height >
-                            segHeight
-                        ) {
-                            label.style(
-                                "display",
-                                "none"
-                            );
-                        }
-                    }
-                );
-
                 svg
                     .selectAll(
                         ".total-label"
@@ -4147,7 +4063,7 @@
                                     ) {
                                         return (
                                             row[
-                                                key
+                                            key
                                             ] || 0
                                         );
                                     }
@@ -4166,7 +4082,7 @@
                             return (
                                 yScale(
                                     row[
-                                        categoryKey
+                                    categoryKey
                                     ]
                                 ) +
                                 yScale.bandwidth() /
@@ -4203,7 +4119,7 @@
                                 ) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] || 0
                                     );
                                 }
@@ -4275,7 +4191,7 @@
                                 function (row) {
                                     return (
                                         row[
-                                            key
+                                        key
                                         ] || 0
                                     );
                                 }
@@ -4320,8 +4236,8 @@
                         seriesColorMap.set(
                             key,
                             PIE_COLORS[
-                                index %
-                                PIE_COLORS.length
+                            index %
+                            PIE_COLORS.length
                             ]
                         );
                     }
@@ -4334,7 +4250,8 @@
                     activeType,
                     sortedKeys,
                     tickSize,
-                    seriesColorMap
+                    seriesColorMap,
+                    fontScale
                 );
 
                 const categories =
@@ -4342,7 +4259,7 @@
                         function (row) {
                             return String(
                                 row[
-                                    categoryKey
+                                categoryKey
                                 ]
                             );
                         }
@@ -4380,7 +4297,7 @@
                                 ) {
                                     const val =
                                         row[
-                                            key
+                                        key
                                         ] || 0;
 
                                     if (
@@ -4573,7 +4490,7 @@
                                                     return xScale(
                                                         String(
                                                             d[
-                                                                categoryKey
+                                                            categoryKey
                                                             ]
                                                         )
                                                     );
@@ -4585,7 +4502,7 @@
                                                 ) {
                                                     return yScale(
                                                         d[
-                                                            key
+                                                        key
                                                         ] || 0
                                                     );
                                                 }
@@ -4653,7 +4570,7 @@
                                         .attr(
                                             "stroke-width",
                                             key ===
-                                            targetKey
+                                                targetKey
                                                 ? 4
                                                 : 2.5
                                         );
@@ -4725,7 +4642,7 @@
 
                                 const desc =
                                     currentDescriptions[
-                                        key
+                                    key
                                     ] || null;
 
                                 const mainTxt =
@@ -4811,7 +4728,7 @@
 
                                     const desc =
                                         currentDescriptions[
-                                            key
+                                        key
                                         ] || null;
 
                                     const mainTxt =
@@ -5022,7 +4939,7 @@
                                             xScale(
                                                 String(
                                                     row[
-                                                        categoryKey
+                                                    categoryKey
                                                     ]
                                                 )
                                             );
@@ -5050,7 +4967,7 @@
                                     xScale(
                                         String(
                                             closestRow[
-                                                categoryKey
+                                            categoryKey
                                             ]
                                         )
                                     );
@@ -5081,7 +4998,7 @@
                                         ) {
                                             return yScale(
                                                 closestRow[
-                                                    key
+                                                key
                                                 ] || 0
                                             );
                                         }
@@ -5108,7 +5025,7 @@
                                                     ] !==
                                                         undefined
                                                         ? closestRow[
-                                                            key
+                                                        key
                                                         ]
                                                         : 0;
 
@@ -5354,7 +5271,7 @@
                                         String(
                                             d
                                                 .data[
-                                                categoryKey
+                                            categoryKey
                                             ]
                                         )
                                     );
@@ -5449,7 +5366,7 @@
                                     path.style(
                                         "opacity",
                                         layer.key ===
-                                        targetKey
+                                            targetKey
                                             ? 0.95
                                             : 0.85
                                     );
@@ -5516,7 +5433,7 @@
 
                                 const desc =
                                     currentDescriptions[
-                                        key
+                                    key
                                     ] || null;
 
                                 const mainTxt =
@@ -5602,7 +5519,7 @@
 
                                     const desc =
                                         currentDescriptions[
-                                            key
+                                        key
                                         ] || null;
 
                                     const mainTxt =
@@ -5766,7 +5683,7 @@
                                             xScale(
                                                 String(
                                                     row[
-                                                        categoryKey
+                                                    categoryKey
                                                     ]
                                                 )
                                             );
@@ -5794,7 +5711,7 @@
                                     xScale(
                                         String(
                                             closestRow[
-                                                categoryKey
+                                            categoryKey
                                             ]
                                         )
                                     );
@@ -5830,7 +5747,7 @@
                                                     ] !==
                                                         undefined
                                                         ? closestRow[
-                                                            key
+                                                        key
                                                         ]
                                                         : 0;
 
@@ -5908,6 +5825,9 @@
                     "none"
                 );
 
+                // Reset headerRow margin so the heatmap content starts below the header
+                headerRow.style("margin-bottom", "12px");
+
                 const heatmapWrapper =
                     contentRow
                         .append(
@@ -5967,8 +5887,8 @@
                         }
                     ) ||
                     valueKeys[
-                        valueKeys.length -
-                        1
+                    valueKeys.length -
+                    1
                     ] ||
                     "TOTAL";
 
@@ -6001,14 +5921,14 @@
                             const valA =
                                 String(
                                     a[
-                                        cpcDisplayKey
+                                    cpcDisplayKey
                                     ] || ""
                                 );
 
                             const valB =
                                 String(
                                     b[
-                                        cpcDisplayKey
+                                    cpcDisplayKey
                                     ] || ""
                                 );
 
@@ -6036,14 +5956,14 @@
                             const valA =
                                 String(
                                     a[
-                                        cpcDisplayKey
+                                    cpcDisplayKey
                                     ] || ""
                                 );
 
                             const valB =
                                 String(
                                     b[
-                                        cpcDisplayKey
+                                    cpcDisplayKey
                                     ] || ""
                                 );
 
@@ -6075,7 +5995,7 @@
                                 const val =
                                     parseFloat(
                                         row[
-                                            ck
+                                        ck
                                         ]
                                     ) || 0;
 
@@ -6142,7 +6062,7 @@
                         const tot =
                             parseFloat(
                                 row[
-                                    totalColKey
+                                totalColKey
                                 ]
                             ) || 0;
 
@@ -6208,7 +6128,7 @@
                         )
                         .style(
                             "font-size",
-                            "13px"
+                            tickSize
                         )
                         .style(
                             "color",
@@ -6481,7 +6401,7 @@
                             ] !== undefined
                                 ? String(
                                     row[
-                                        cpcDisplayKey
+                                    cpcDisplayKey
                                     ]
                                 )
                                 : "";
@@ -6492,7 +6412,7 @@
                             ] !== undefined
                                 ? String(
                                     row[
-                                        descriptionColKey
+                                    descriptionColKey
                                     ]
                                 )
                                 : "";
@@ -6597,7 +6517,7 @@
                                     ] !== undefined
                                         ? parseFloat(
                                             row[
-                                                colKey
+                                            colKey
                                             ]
                                         )
                                         : 0;
@@ -6710,7 +6630,7 @@
                             ] !== undefined
                                 ? parseFloat(
                                     row[
-                                        totalColKey
+                                    totalColKey
                                     ]
                                 )
                                 : 0;
@@ -6990,15 +6910,8 @@
                 .remove();
 
             if (selectedLogo) {
-                const logoWidth =
-                    Math.max(
-                        50,
-                        Math.min(
-                            100,
-                            containerWidth *
-                            0.14
-                        )
-                    );
+                const baseLogoWidth = Math.min(100, Math.max(45, containerWidth * 0.14));
+                const logoWidth = Math.round(baseLogoWidth * fontScale);
 
                 let logoHeight;
 
@@ -7009,12 +6922,21 @@
                     logoHeight =
                         logoWidth;
                 } else {
-                    logoHeight =
+                    logoHeight = Math.round(
                         logoWidth *
-                        0.35;
+                        0.35
+                    );
                 }
 
                 logoRow
+                    .style(
+                        "padding-top",
+                        `${Math.round(2 * fontScale)}px`
+                    )
+                    .style(
+                        "padding-bottom",
+                        `${Math.round(5 * fontScale)}px`
+                    )
                     .append(
                         "img"
                     )
@@ -7406,7 +7328,7 @@
 
                                         if (
                                             !rawData[
-                                                headerRowIndex
+                                            headerRowIndex
                                             ]
                                         ) {
                                             throw new Error(
@@ -7430,9 +7352,8 @@
 
                                                     return (
                                                         cleanedKey ||
-                                                        `Column ${
-                                                            index +
-                                                            1
+                                                        `Column ${index +
+                                                        1
                                                         }`
                                                     );
                                                 }
@@ -7448,7 +7369,7 @@
                                         ) {
                                             const sourceRow =
                                                 rawData[
-                                                    rowIndex
+                                                rowIndex
                                                 ];
 
                                             if (
@@ -7478,7 +7399,7 @@
                                                             columnIndex >
                                                             0 &&
                                                             sourceRow[
-                                                                columnIndex
+                                                            columnIndex
                                                             ]
                                                         ) {
                                                             currentDescriptions[
@@ -7486,7 +7407,7 @@
                                                             ] =
                                                                 String(
                                                                     sourceRow[
-                                                                        columnIndex
+                                                                    columnIndex
                                                                     ]
                                                                 ).trim();
                                                         }
@@ -7509,7 +7430,7 @@
                                                     ] =
                                                         parseCellValue(
                                                             sourceRow[
-                                                                columnIndex
+                                                            columnIndex
                                                             ]
                                                         );
                                                 }
@@ -7534,9 +7455,8 @@
 
                                                     return (
                                                         cleanedKey ||
-                                                        `Column ${
-                                                            index +
-                                                            1
+                                                        `Column ${index +
+                                                        1
                                                         }`
                                                     );
                                                 }
@@ -7551,7 +7471,7 @@
                                         ) {
                                             const sourceRow =
                                                 rawData[
-                                                    rowIndex
+                                                rowIndex
                                                 ];
 
                                             if (
@@ -7581,7 +7501,7 @@
                                                             columnIndex >
                                                             0 &&
                                                             sourceRow[
-                                                                columnIndex
+                                                            columnIndex
                                                             ]
                                                         ) {
                                                             currentDescriptions[
@@ -7589,7 +7509,7 @@
                                                             ] =
                                                                 String(
                                                                     sourceRow[
-                                                                        columnIndex
+                                                                    columnIndex
                                                                     ]
                                                                 ).trim();
                                                         }
@@ -7612,7 +7532,7 @@
                                                     ] =
                                                         parseCellValue(
                                                             sourceRow[
-                                                                columnIndex
+                                                            columnIndex
                                                             ]
                                                         );
                                                 }
@@ -7644,7 +7564,7 @@
                                                         ) {
                                                             const val =
                                                                 row[
-                                                                    k
+                                                                k
                                                                 ];
 
                                                             return (
@@ -7678,7 +7598,7 @@
                                         parsedData
                                     );
                                 } catch (
-                                    parsingError
+                                parsingError
                                 ) {
                                     console.error(
                                         `Parola chart ${uid}:`,
@@ -7707,7 +7627,7 @@
                     }
                 );
             } catch (
-                csvError
+            csvError
             ) {
                 console.error(
                     `Parola chart ${uid}:`,
@@ -7933,7 +7853,7 @@
             loadBackendCsv,
             500
         );
-        }
+    }
 
 
     // =========================================================
