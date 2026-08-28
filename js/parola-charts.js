@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.73 - "Applied August 27 Comments"
+ * 1.0.74 - "v1.0.73 + restored logo options / Gutenberg support"
  */
 (function () {
 
@@ -281,6 +281,14 @@
             {
                 value: "parola logo with text.png",
                 label: "Logo with Text"
+            },
+            {
+                value: "parola logo only.png",
+                label: "Logo Only"
+            },
+            {
+                value: "parola logo all white.png",
+                label: "All White"
             }
         ].forEach(function (item) {
             const option = logoPicker
