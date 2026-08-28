@@ -268,9 +268,10 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.61', // Multi-instance + robust CSV parsing (no NaN bars)
-        // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60"
-		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60"
+        '1.0.73', // Multi-instance + robust CSV parsing (no NaN bars)
+        // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60", "1.0.62", "1.0.63", "1.0.64", "1.0.65", "1.0.66", "1.0.67", "1.0.68", "1.0.70"
+		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73"
+		// JONELL'S VERSION: "1.0.61"
         true
     );
 }
@@ -353,10 +354,6 @@ function custom_d3_register_block() {
 					'type'    => 'string',
 					'default' => 'bar',
 				),
-				'logoStyle'   => array(
-					'type'    => 'string',
-					'default' => 'parola logo only.png',
-				),
 			),
 			'supports'        => array(
 				'multiple' => true,
@@ -389,29 +386,12 @@ function custom_d3_render_block( $attributes ) {
 		'stacked-bar',
 		'horizontal-bar',
 		'horizontal-stacked-bar',
-		'multi-line',
-		'stacked-area',
-		'heatmap',
 	);
 
 	$chart_type = isset( $attributes['chartType'] )
 		? sanitize_key( $attributes['chartType'] )
 		: 'bar';
 
-	$allowed_logo_styles = array(
-		'parola logo only.png',
-		'parola logo all white.png',
-		'parola logo with text.png',
-	);
-
-	$logo_style = isset( $attributes['logoStyle'] )
-		? sanitize_text_field( $attributes['logoStyle'] )
-		: 'parola logo only.png';
-
-	if ( ! in_array( $logo_style, $allowed_logo_styles, true ) ) {
-		$logo_style = 'parola logo only.png';
-	}
-	
 	if ( ! in_array( $chart_type, $allowed_chart_types, true ) ) {
 		$chart_type = 'bar';
 	}
@@ -438,698 +418,185 @@ function custom_d3_render_block( $attributes ) {
 	}
 
 	return sprintf(
-		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" chart-type="%5$s" logo-style="%6$s"></div></div>',
+		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" chart-type="%5$s"></div></div>',
 		$wrapper_attributes,
 		esc_attr( $canvas_id ),
 		esc_url( $csv_url ),
 		esc_attr( $csv_filename ),
-		esc_attr( $chart_type ),
-		esc_attr( $logo_style )
+		esc_attr( $chart_type )
 	);
 }
 
 /* =========================================================================
- * 4. BLOCK EDITOR SCRIPT + LIVE CHART PREVIEW
+ * 4. BLOCK EDITOR SCRIPT (registered "virtually" via wp_add_inline_script)
  * ========================================================================= */
 
 add_action( 'enqueue_block_editor_assets', 'custom_d3_enqueue_editor_script' );
-
 function custom_d3_enqueue_editor_script() {
 
-	/**
-	 * Load the same chart libraries used on the frontend.
-	 */
-	wp_enqueue_script(
-		'papaparse-cdn-editor',
-		'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js',
-		array(),
-		'5.4.1',
-		true
-	);
-
-	wp_enqueue_script(
-		'd3-cdn-editor',
-		'https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js',
-		array(),
-		'7.9.0',
-		true
-	);
-
-	/**
-	 * Load the SAME chart renderer in Gutenberg.
-	 */
-	wp_enqueue_script(
-		'parola-charts-editor',
-		get_stylesheet_directory_uri() . '/js/parola-charts.js',
-		array(
-			'papaparse-cdn-editor',
-			'd3-cdn-editor',
-		),
-		'1.0.61',
-		true
-	);
-
-	/**
-	 * Gutenberg block controls.
-	 */
+	// Register a handle with no actual src file, then attach the whole
+	// script body as an inline script. This avoids needing FTP access
+	// to create a separate .js file.
 	wp_register_script(
 		'custom-d3-editor-script',
 		'',
-		array(
-			'wp-blocks',
-			'wp-element',
-			'wp-components',
-			'wp-block-editor',
-			'wp-i18n',
-			'parola-charts-editor',
-		),
-		'1.0.1',
+		array( 'wp-blocks', 'wp-element', 'wp-components', 'wp-block-editor', 'wp-i18n' ),
+		'1.0.0',
 		true
 	);
 
-	wp_add_inline_script(
-		'custom-d3-editor-script',
-		custom_d3_get_editor_js()
-	);
+	wp_add_inline_script( 'custom-d3-editor-script', custom_d3_get_editor_js() );
 
-	wp_enqueue_script(
-		'custom-d3-editor-script'
-	);
+	wp_enqueue_script( 'custom-d3-editor-script' );
 }
 
-
 function custom_d3_get_editor_js() {
-
 	ob_start();
 	?>
 ( function ( blocks, element, components, blockEditor, i18n ) {
-
-	var el = element.createElement;
-
+	var el              = element.createElement;
 	var registerBlockType = blocks.registerBlockType;
-
-	var useBlockProps = blockEditor.useBlockProps;
-
-	var MediaUpload = blockEditor.MediaUpload;
+	var useBlockProps    = blockEditor.useBlockProps;
+	var MediaUpload      = blockEditor.MediaUpload;
 	var MediaUploadCheck = blockEditor.MediaUploadCheck;
+	var Button           = components.Button;
+	var Notice           = components.Notice;
+	var SelectControl    = components.SelectControl;
+	var __               = i18n.__;
 
-	var Button = components.Button;
-	var Notice = components.Notice;
-	var SelectControl = components.SelectControl;
-
-	var __ = i18n.__;
-
-
-	registerBlockType(
-		'custom-d3/chart-block',
-		{
-			title: __(
-				'D3 Chart',
-				'custom-d3'
-			),
-
-			description: __(
-				'Displays a D3.js chart generated from an uploaded CSV file. Multiple charts per page are supported.',
-				'custom-d3'
-			),
-
-			icon: 'chart-bar',
-
-			category: 'widgets',
-
-			supports: {
-				multiple: true
+	registerBlockType( 'custom-d3/chart-block', {
+		title: __( 'D3 Chart', 'custom-d3' ),
+		description: __( 'Displays a D3.js chart generated from an uploaded CSV file. Multiple charts per page are supported.', 'custom-d3' ),
+		icon: 'chart-bar',
+		category: 'widgets',
+		supports: {
+			multiple: true
+		},
+		attributes: {
+			csvId: {
+				type: 'number',
+				default: 0
 			},
-
-			attributes: {
-
-				csvId: {
-					type: 'number',
-					default: 0
-				},
-
-				csvUrl: {
-					type: 'string',
-					default: ''
-				},
-
-				csvFilename: {
-					type: 'string',
-					default: ''
-				},
-
-				chartType: {
-					type: 'string',
-					default: 'bar'
-				},
-
-				logoStyle: {
-					type: 'string',
-					default: 'parola logo only.png'
-				}
+			csvUrl: {
+				type: 'string',
+				default: ''
 			},
-
-
-			edit: function ( props ) {
-
-				var attributes =
-					props.attributes;
-
-				var setAttributes =
-					props.setAttributes;
-
-				var blockProps =
-					useBlockProps();
-
-
-				/* =====================================================
-				 * CSV
-				 * ===================================================== */
-
-				function onSelectCsv( media ) {
-
-					if (
-						! media ||
-						! media.url
-					) {
-						return;
-					}
-
-					setAttributes(
-						{
-							csvId:
-								media.id || 0,
-
-							csvUrl:
-								media.url || '',
-
-							csvFilename:
-								media.filename ||
-								media.title ||
-								''
-						}
-					);
-				}
-
-
-				function onRemoveCsv() {
-
-					setAttributes(
-						{
-							csvId: 0,
-							csvUrl: '',
-							csvFilename: ''
-						}
-					);
-				}
-
-
-				var hasCsv =
-					!! attributes.csvId &&
-					!! attributes.csvUrl;
-
-
-				var children = [];
-
-
-				/* =====================================================
-				 * CSV STATUS
-				 * ===================================================== */
-
-				if ( ! hasCsv ) {
-
-					children.push(
-						el(
-							Notice,
-							{
-								key:
-									'no-csv-notice',
-
-								status:
-									'warning',
-
-								isDismissible:
-									false
-							},
-
-							__(
-								'No CSV file selected. Please upload or choose a CSV file below.',
-								'custom-d3'
-							)
-						)
-					);
-
-				} else {
-
-					children.push(
-						el(
-							'p',
-							{
-								key:
-									'csv-filename'
-							},
-
-							__(
-								'Selected CSV: ',
-								'custom-d3'
-							) +
-							attributes.csvFilename
-						)
-					);
-				}
-
-
-				/* =====================================================
-				 * CSV SELECT / REPLACE
-				 * ===================================================== */
-
-				children.push(
-					el(
-						MediaUploadCheck,
-						{
-							key:
-								'media-upload-check'
-						},
-
-						el(
-							MediaUpload,
-							{
-								onSelect:
-									onSelectCsv,
-
-								allowedTypes: [
-									'text/csv',
-									'.csv'
-								],
-
-								value:
-									attributes.csvId,
-
-								render:
-									function ( openProps ) {
-
-										return el(
-											Button,
-											{
-												variant:
-													'primary',
-
-												onClick:
-													openProps.open
-											},
-
-											hasCsv
-												? __(
-													'Replace CSV',
-													'custom-d3'
-												)
-												: __(
-													'Select or Upload CSV',
-													'custom-d3'
-												)
-										);
-									}
-							}
-						)
-					)
-				);
-
-
-				/* =====================================================
-				 * REMOVE CSV
-				 * ===================================================== */
-
-				if ( hasCsv ) {
-
-					children.push(
-						el(
-							Button,
-							{
-								key:
-									'remove-csv',
-
-								variant:
-									'secondary',
-
-								isDestructive:
-									true,
-
-								onClick:
-									onRemoveCsv,
-
-								style: {
-									marginLeft:
-										'8px'
-								}
-							},
-
-							__(
-								'Remove CSV',
-								'custom-d3'
-							)
-						)
-					);
-				}
-
-
-				/* =====================================================
-				 * CHART TYPE
-				 * ===================================================== */
-
-				children.push(
-					el(
-						SelectControl,
-						{
-							key:
-								'chart-type',
-
-							label:
-								__(
-									'Chart Type',
-									'custom-d3'
-								),
-
-							value:
-								attributes.chartType ||
-								'bar',
-
-							options: [
-
-								{
-									label:
-										__(
-											'Bar',
-											'custom-d3'
-										),
-									value:
-										'bar'
-								},
-
-								{
-									label:
-										__(
-											'Line',
-											'custom-d3'
-										),
-									value:
-										'line'
-								},
-
-								{
-									label:
-										__(
-											'Pie Chart',
-											'custom-d3'
-										),
-									value:
-										'pie'
-								},
-
-								{
-									label:
-										__(
-											'Stacked Bar Chart',
-											'custom-d3'
-										),
-									value:
-										'stacked-bar'
-								},
-
-								{
-									label:
-										__(
-											'Horizontal Bar Chart',
-											'custom-d3'
-										),
-									value:
-										'horizontal-bar'
-								},
-
-								{
-									label:
-										__(
-											'Horizontal Stacked Bar Chart',
-											'custom-d3'
-										),
-									value:
-										'horizontal-stacked-bar'
-								},
-
-								{
-									label:
-										__(
-											'Multiple Line Chart',
-											'custom-d3'
-										),
-									value:
-										'multi-line'
-								},
-
-								{
-									label:
-										__(
-											'Stacked Area Chart',
-											'custom-d3'
-										),
-									value:
-										'stacked-area'
-								},
-
-								{
-									label:
-										__(
-											'Heatmaps',
-											'custom-d3'
-										),
-									value:
-										'heatmap'
-								}
-							],
-
-							onChange:
-								function ( value ) {
-
-									setAttributes(
-										{
-											chartType:
-												value
-										}
-									);
-								}
-						}
-					)
-				);
-
-
-				/* =====================================================
-				 * LOGO STYLE
-				 * ===================================================== */
-
-				children.push(
-					el(
-						SelectControl,
-						{
-							key:
-								'logo-style',
-
-							label:
-								__(
-									'Logo Style',
-									'custom-d3'
-								),
-
-							value:
-								attributes.logoStyle ||
-								'parola logo only.png',
-
-							options: [
-
-								{
-									label:
-										__(
-											'Logo Only',
-											'custom-d3'
-										),
-
-									value:
-										'parola logo only.png'
-								},
-
-								{
-									label:
-										__(
-											'All White',
-											'custom-d3'
-										),
-
-									value:
-										'parola logo all white.png'
-								},
-
-								{
-									label:
-										__(
-											'Logo with Text',
-											'custom-d3'
-										),
-
-									value:
-										'parola logo with text.png'
-								}
-							],
-
-							onChange:
-								function ( value ) {
-
-									setAttributes(
-										{
-											logoStyle:
-												value
-										}
-									);
-								}
-						}
-					)
-				);
-
-
-				/* =====================================================
-				 * LIVE PREVIEW
-				 * ===================================================== */
-
-				if ( hasCsv ) {
-
-					children.push(
-
-						el(
-							'div',
-							{
-								key:
-									'preview-heading-' +
-									attributes.csvId +
-									'-' +
-									attributes.chartType +
-									'-' +
-									attributes.logoStyle,
-
-								style: {
-									marginTop:
-										'25px',
-
-									paddingTop:
-										'20px',
-
-									borderTop:
-										'1px solid #dddddd'
-								}
-							},
-
-							el(
-								'div',
-								{
-									style: {
-										fontWeight:
-											'600',
-
-										marginBottom:
-											'12px',
-
-										fontSize:
-											'14px'
-									}
-								},
-
-								__(
-									'Chart Preview',
-									'custom-d3'
-								)
-							),
-
-							el(
-								'div',
-								{
-									/*
-									 * IMPORTANT:
-									 *
-									 * The key changes whenever one of the
-									 * settings changes. React therefore
-									 * creates a fresh preview element and
-									 * parola-charts.js can initialize it.
-									 */
-									key:
-										'chart-preview-' +
-										attributes.csvId +
-										'-' +
-										attributes.chartType +
-										'-' +
-										attributes.logoStyle,
-
-									className:
-										'd3-test-canvas d3-gutenberg-preview',
-
-									'data-csv-url':
-										attributes.csvUrl,
-
-									'data-csv-filename':
-										attributes.csvFilename ||
-										'chart.csv',
-
-									'chart-type':
-										attributes.chartType ||
-										'bar',
-
-									'logo-style':
-										attributes.logoStyle ||
-										'parola logo only.png',
-
-									style: {
-										width:
-											'100%',
-
-										minHeight:
-											'300px',
-
-										boxSizing:
-											'border-box'
-									}
-								}
-							)
-						)
-					);
-				}
-
-
-				/* =====================================================
-				 * EDITOR OUTPUT
-				 * ===================================================== */
-
-				return el(
-					'div',
-					blockProps,
-
-					el(
-						'div',
-						{
-							className:
-								'custom-d3-editor-notice-wrap'
-						},
-
-						children
-					)
-				);
+			csvFilename: {
+				type: 'string',
+				default: ''
 			},
-
-
-			save: function () {
-
-				/*
-				 * Dynamic block.
-				 * PHP handles frontend rendering.
-				 */
-				return null;
+			chartType: {
+				type: 'string',
+				default: 'bar'
 			}
+		},
+
+		edit: function ( props ) {
+			var attributes   = props.attributes;
+			var setAttributes = props.setAttributes;
+			var blockProps   = useBlockProps();
+
+			function onSelectCsv( media ) {
+				if ( ! media || ! media.url ) {
+					return;
+				}
+				setAttributes( {
+					csvId: media.id || 0,
+					csvUrl: media.url || '',
+					csvFilename: media.filename || media.title || ''
+				} );
+			}
+
+			function onRemoveCsv() {
+				setAttributes( {
+					csvId: 0,
+					csvUrl: '',
+					csvFilename: ''
+				} );
+			}
+
+			var hasCsv = !! attributes.csvId && !! attributes.csvUrl;
+
+			var children = [];
+
+			if ( ! hasCsv ) {
+				children.push(
+					el( Notice, {
+						key: 'no-csv-notice',
+						status: 'warning',
+						isDismissible: false
+					}, __( 'No CSV file selected. Please upload or choose a CSV file below.', 'custom-d3' ) )
+				);
+			} else {
+				children.push(
+					el( 'p', { key: 'csv-filename' },
+						__( 'Selected CSV: ', 'custom-d3' ) + attributes.csvFilename
+					)
+				);
+			}
+
+			children.push(
+				el( MediaUploadCheck, { key: 'media-upload-check' },
+					el( MediaUpload, {
+						onSelect: onSelectCsv,
+						allowedTypes: [ 'text/csv', '.csv' ],
+						value: attributes.csvId,
+						render: function ( openProps ) {
+							return el( Button, {
+								variant: 'primary',
+								onClick: openProps.open
+							}, hasCsv
+								? __( 'Replace CSV', 'custom-d3' )
+								: __( 'Select or Upload CSV', 'custom-d3' )
+							);
+						}
+					} )
+				)
+			);
+
+			if ( hasCsv ) {
+				children.push(
+					el( Button, {
+						key: 'remove-csv',
+						variant: 'secondary',
+						isDestructive: true,
+						onClick: onRemoveCsv,
+						style: { marginLeft: '8px' }
+					}, __( 'Remove CSV', 'custom-d3' ) )
+				);
+			}
+
+			children.push(
+				el( SelectControl, {
+					key: 'chart-type',
+					label: __( 'Chart Type', 'custom-d3' ),
+					value: attributes.chartType || 'bar',
+					options: [
+						{ label: __( 'Column', 'custom-d3' ), value: 'bar' },
+						{ label: __( 'Line', 'custom-d3' ), value: 'line' },
+						{ label: __( 'Pie Chart', 'custom-d3' ), value: 'pie' },
+						{ label: __( 'Stacked Column Chart', 'custom-d3' ), value: 'stacked-bar' },
+						{ label: __( 'Bar', 'custom-d3' ), value: 'horizontal-bar' },
+						{ label: __( 'Stacked Bar Chart', 'custom-d3' ), value: 'horizontal-stacked-bar' }
+					],
+					onChange: function ( value ) {
+						setAttributes( {
+							chartType: value
+						} );
+					}
+				} )
+			);
+
+			return el( 'div', blockProps,
+				el( 'div', { className: 'custom-d3-editor-notice-wrap' }, children )
+			);
+		},
+
+		save: function () {
+			// Dynamic block — rendering is handled entirely by PHP.
+			return null;
 		}
-	);
+	} );
 
 } )(
 	window.wp.blocks,
@@ -1139,7 +606,6 @@ function custom_d3_get_editor_js() {
 	window.wp.i18n
 );
 	<?php
-
 	return ob_get_clean();
 }
 
