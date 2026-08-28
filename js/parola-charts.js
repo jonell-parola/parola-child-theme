@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.61 - "Fixed Issues"
+ * 1.0.71 - "Applied August 27 Comments"
  */
 (function () {
 
@@ -99,7 +99,7 @@
 
 		const defaultLogoStyle =
 			canvas.attr("logo-style") ||
-			"parola logo only.png";
+			"parola logo with text.png";
 
 		const activeFont = "Inter";
 
@@ -279,14 +279,6 @@
 
 		[
 			{
-				value: "parola logo only.png",
-				label: "Logo Only"
-			},
-			{
-				value: "parola logo all white.png",
-				label: "All White"
-			},
-			{
 				value: "parola logo with text.png",
 				label: "Logo with Text"
 			}
@@ -401,7 +393,9 @@
 			.style("display", "flex")
 			.style("flex-direction", "column")
 			.style("align-items", "flex-start")
-			.style("margin-bottom", "15px");
+			.style("margin-bottom", "15px")
+			.style("position", "relative")
+			.style("z-index", "10");
 
 		const headerTitle = headerRow
 			.append("div")
@@ -427,7 +421,9 @@
 			.style("width", "100%")
 			.style("justify-content", "center")
 			.style("gap", "20px")
-			.style("margin-top", "16px");
+			.style("margin-top", "16px")
+			.style("position", "relative")
+			.style("z-index", "10");
 
 		const contentRow = chartWrapper
 			.append("div")
@@ -735,7 +731,8 @@
 			activeType,
 			valueKeys,
 			tickSize,
-			seriesColorMap
+			seriesColorMap,
+			fontScale
 		) {
 			const isHeaderType =
 				activeType === "stacked-bar" ||
@@ -763,6 +760,7 @@
 				"flex"
 			);
 
+			const currentFontScale = fontScale || 1;
 			const subtitleSize = `${Math.round(parseInt(mainTitleSize, 10) * (16 / 22))}px`;
 
 			headerTitle
@@ -786,6 +784,18 @@
 					"font-size",
 					subtitleSize
 				);
+
+			if (activeType === "heatmap") {
+				headerSubtitle.style(
+					"margin-bottom",
+					`${Math.max(6, Math.round(12 * currentFontScale))}px`
+				);
+			} else {
+				headerSubtitle.style(
+					"margin-bottom",
+					"0px"
+				);
+			}
 
 			if (activeType === "heatmap") {
 				headerLegend.style(
@@ -830,13 +840,27 @@
 				return fallbackColorScale(key);
 			};
 
-			if (activeType === "horizontal-stacked-bar" || activeType === "stacked-bar") {
-				headerLegend.style("margin-top", "44px");
-				headerRow.style("margin-bottom", "-12px");
+			const marginTop = Math.round(32 * currentFontScale);
+			headerLegend.style("margin-top", `${marginTop}px`);
+
+			if (
+				activeType === "multi-line" ||
+				activeType === "stacked-area"
+			) {
+				const legendMarginBottom = Math.round(48 * currentFontScale);
+				headerLegend.style("margin-bottom", `${legendMarginBottom}px`);
+				headerRow.style("margin-bottom", "0px");
+			} else if (activeType === "heatmap") {
+				headerLegend.style("margin-bottom", "0px");
+				headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
 			} else {
-				headerLegend.style("margin-top", "24px");
-				headerRow.style("margin-bottom", "10px");
+				headerLegend.style("margin-bottom", "0px");
+				headerRow.style("margin-bottom", `${Math.round(-64 * currentFontScale)}px`);
 			}
+
+			const legendGap = Math.max(8, Math.round(20 * currentFontScale));
+			const dotSize = Math.max(6, Math.round(12 * currentFontScale));
+			const itemGap = Math.max(4, Math.round(6 * currentFontScale));
 
 			headerLegend
 				.style(
@@ -850,6 +874,10 @@
 				.style(
 					"flex-wrap",
 					"wrap"
+				)
+				.style(
+					"gap",
+					`${legendGap}px`
 				);
 
 			valueKeys.forEach(
@@ -872,7 +900,7 @@
 							)
 							.style(
 								"gap",
-								"6px"
+								`${itemGap}px`
 							)
 							.style(
 								"cursor",
@@ -888,11 +916,19 @@
 						.append("div")
 						.style(
 							"width",
-							"12px"
+							`${dotSize}px`
 						)
 						.style(
 							"height",
-							"12px"
+							`${dotSize}px`
+						)
+						.style(
+							"min-width",
+							`${dotSize}px`
+						)
+						.style(
+							"min-height",
+							`${dotSize}px`
 						)
 						.style(
 							"border-radius",
@@ -1052,17 +1088,20 @@
 				currentSubtitle ||
 				"Global Patent Trends";
 
-			const fontScale = Math.min(1, Math.max(0.65, containerWidth / 550));
+			const fontScale = Math.min(1, Math.max(0.55, containerWidth / 550));
 			const mainTitleSize = `${Math.round(22 * fontScale)}px`;
 			const subtitleSize = `${Math.round(16 * fontScale)}px`;
 			const tickSize = `${Math.round(13 * fontScale)}px`;
 			const shapeTextSize = `${Math.round(14 * fontScale)}px`;
 			const pieShapeTextSize = `${Math.round(12 * fontScale)}px`;
 
+			const svgTitleY = activeType === "line" ? -50 * fontScale : -40 * fontScale;
+			const svgSubtitleY = activeType === "line" ? -26 * fontScale : -18 * fontScale;
+
 			mainTitleText
 				.text(mainTitleValue)
 				.attr("x", -margin.left)
-				.attr("y", -40)
+				.attr("y", svgTitleY)
 				.style(
 					"font-family",
 					activeFont
@@ -1075,7 +1114,7 @@
 			subtitleText
 				.text(subtitleValue)
 				.attr("x", -margin.left)
-				.attr("y", -18)
+				.attr("y", svgSubtitleY)
 				.style(
 					"font-family",
 					activeFont
@@ -1196,7 +1235,9 @@
 				mainTitleSize,
 				activeType,
 				valueKeys,
-				tickSize
+				tickSize,
+				undefined,
+				fontScale
 			);
 
 			applyChartContainerStyles();
@@ -1593,7 +1634,11 @@
 					)
 					.style(
 						"font-size",
-						pieShapeTextSize
+						tickSize
+					)
+					.style(
+						"font-weight",
+						"bold"
 					)
 					.style(
 						"fill",
@@ -2297,6 +2342,40 @@
 							0
 						]);
 
+				// Render y-axis first to measure label widths, then remove it
+				yAxisGroup
+					.call(
+						d3.axisLeft(yScale)
+							.ticks(5)
+					)
+					.selectAll("text")
+					.style("font-family", activeFont)
+					.style("font-size", tickSize);
+
+				let maxYLabelWidth = 0;
+				yAxisGroup.selectAll("text").each(function () {
+					const bbox = this.getBBox();
+					if (bbox.width > maxYLabelWidth) {
+						maxYLabelWidth = bbox.width;
+					}
+				});
+
+				yAxisGroup.selectAll("*").remove();
+
+				// Compute left offset from y-label widths, then update xScale range
+				const colExtraLeft = maxYLabelWidth > 0 ? maxYLabelWidth + 6 : 25;
+				const colActiveWidth = chartWidth - colExtraLeft - margin.right;
+
+				xScale.range([0, colActiveWidth]);
+
+				svg.attr("transform", `translate(${colExtraLeft},${margin.top})`);
+
+				// Align title/subtitle left edge with the first bar
+				const firstBarX = xScale(data[0][categoryKey]) || 0;
+				mainTitleText.attr("x", firstBarX);
+				subtitleText.attr("x", firstBarX);
+
+				// Now call x-axis AFTER xScale range is finalised so labels align with bars
 				xAxisGroup
 					.call(
 						d3.axisBottom(
@@ -2336,33 +2415,6 @@
 						"font-size",
 						tickSize
 					);
-
-				// Render y-axis to measure label widths, then hide it
-				yAxisGroup
-					.call(
-						d3.axisLeft(yScale)
-							.ticks(5)
-					)
-					.selectAll("text")
-					.style("font-family", activeFont)
-					.style("font-size", tickSize);
-
-				let maxYLabelWidth = 0;
-				yAxisGroup.selectAll("text").each(function () {
-					const bbox = this.getBBox();
-					if (bbox.width > maxYLabelWidth) {
-						maxYLabelWidth = bbox.width;
-					}
-				});
-
-				yAxisGroup.selectAll("*").remove();
-
-				const colExtraLeft = maxYLabelWidth > 0 ? maxYLabelWidth + 6 : 25;
-				const colActiveWidth = chartWidth - colExtraLeft - margin.right;
-
-				xScale.range([0, colActiveWidth]);
-
-				svg.attr("transform", `translate(${colExtraLeft},${margin.top})`);
 
 
 				const barPaths =
@@ -2607,11 +2659,11 @@
 					)
 					.style(
 						"font-weight",
-						"normal"
+						"bold"
 					)
 					.style(
 						"font-size",
-						shapeTextSize
+						tickSize
 					)
 					.text(
 						function (row) {
@@ -2768,6 +2820,10 @@
 					"transform",
 					`translate(${hBarExtraLeft},${margin.top})`
 				);
+
+				// Align title/subtitle left edge with the leftmost y-axis label edge
+				mainTitleText.attr("x", -hBarExtraLeft);
+				subtitleText.attr("x", -hBarExtraLeft);
 
 				xScale.range([
 					0,
@@ -3019,11 +3075,11 @@
 					)
 					.style(
 						"font-weight",
-						"normal"
+						"bold"
 					)
 					.style(
 						"font-size",
-						shapeTextSize
+						tickSize
 					)
 					.text(
 						function (row) {
@@ -4194,7 +4250,8 @@
 					activeType,
 					sortedKeys,
 					tickSize,
-					seriesColorMap
+					seriesColorMap,
+					fontScale
 				);
 
 				const categories =
@@ -5768,6 +5825,9 @@
 					"none"
 				);
 
+				// Reset headerRow margin so the heatmap content starts below the header
+				headerRow.style("margin-bottom", "12px");
+
 				const heatmapWrapper =
 					contentRow
 						.append(
@@ -6068,7 +6128,7 @@
 						)
 						.style(
 							"font-size",
-							"13px"
+							tickSize
 						)
 						.style(
 							"color",
@@ -6850,15 +6910,8 @@
 				.remove();
 
 			if (selectedLogo) {
-				const logoWidth =
-					Math.max(
-						50,
-						Math.min(
-							100,
-							containerWidth *
-							0.14
-						)
-					);
+				const baseLogoWidth = Math.min(100, Math.max(45, containerWidth * 0.14));
+				const logoWidth = Math.round(baseLogoWidth * fontScale);
 
 				let logoHeight;
 
@@ -6869,12 +6922,21 @@
 					logoHeight =
 						logoWidth;
 				} else {
-					logoHeight =
+					logoHeight = Math.round(
 						logoWidth *
-						0.35;
+						0.35
+					);
 				}
 
 				logoRow
+					.style(
+						"padding-top",
+						`${Math.round(2 * fontScale)}px`
+					)
+					.style(
+						"padding-bottom",
+						`${Math.round(5 * fontScale)}px`
+					)
 					.append(
 						"img"
 					)
