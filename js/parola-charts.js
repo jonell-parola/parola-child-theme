@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.73 - "Applied August 27 Comments"
+ * 1.0.76 - "v1.0.74 + v1.0.75 (title/subtitle wrapping & dead space adjustment) + v1.0.76 (dead space adjustment 2)"
  */
 (function () {
 
@@ -281,6 +281,14 @@
 			{
 				value: "parola logo with text.png",
 				label: "Logo with Text"
+			},
+			{
+				value: "parola logo only.png",
+				label: "Logo Only"
+			},
+			{
+				value: "parola logo all white.png",
+				label: "All White"
 			}
 		].forEach(function (item) {
 			const option = logoPicker
@@ -327,7 +335,7 @@
 		const margin = {
 			top: 65,
 			right: 30,
-			bottom: 60,
+			bottom: 28,
 			left: 100
 		};
 
@@ -402,7 +410,11 @@
 			.attr("id", `chart-header-title-${uid}`)
 			.style("font-weight", "bold")
 			.style("color", "#333")
-			.style("line-height", "1.2");
+			.style("line-height", "1.2")
+			.style("word-wrap", "break-word")
+			.style("overflow-wrap", "break-word")
+			.style("white-space", "normal")
+			.style("width", "100%");
 
 		const headerSubtitle = headerRow
 			.append("div")
@@ -412,7 +424,11 @@
 			)
 			.style("color", "#545454")
 			.style("line-height", "1.2")
-			.style("margin-top", "4px");
+			.style("margin-top", "4px")
+			.style("word-wrap", "break-word")
+			.style("overflow-wrap", "break-word")
+			.style("white-space", "normal")
+			.style("width", "100%");
 
 		const headerLegend = headerRow
 			.append("div")
@@ -442,7 +458,7 @@
 			.style("display", "flex")
 			.style("justify-content", "flex-end")
 			.style("padding-top", "2px")
-			.style("padding-bottom", "5px");
+			.style("padding-bottom", "0px");
 
 		const svgOuter = contentRow
 			.append("svg")
@@ -533,12 +549,12 @@
 				)
 				.style(
 					"height",
-					`${scaledHeight}px`
+					`${Math.ceil(scaledHeight)}px`
 				);
 
 			canvas
 				.style("padding-bottom", null)
-				.style("margin-bottom", null);
+				.style("margin-bottom", "12px");
 		}
 
 		function scheduleResponsiveScale() {
@@ -555,7 +571,7 @@
 
 			canvas
 				.style("padding-bottom", null)
-				.style("margin-bottom", null);
+				.style("margin-bottom", "12px");
 
 			requestAnimationFrame(function () {
 				if (!chartWrapper.node()) {
@@ -594,8 +610,6 @@
 		}
 
 		function updateChartWrapperLayout() {
-			const layoutBuffer = 40;
-
 			function applyLayout() {
 				const wrapperNode =
 					chartWrapper.node();
@@ -603,9 +617,6 @@
 				if (!wrapperNode) {
 					return;
 				}
-
-				const wrapperRect =
-					wrapperNode.getBoundingClientRect();
 
 				const contentNode =
 					contentRow.node();
@@ -617,7 +628,6 @@
 				const contentRect =
 					contentNode.getBoundingClientRect();
 
-				let maxContentBottom = 0;
 				let maxContentRight = 0;
 
 				if (svgOuter.node()) {
@@ -625,12 +635,6 @@
 						svgOuter
 							.node()
 							.getBoundingClientRect();
-
-					maxContentBottom = Math.max(
-						maxContentBottom,
-						chartRect.bottom -
-						contentRect.top
-					);
 
 					maxContentRight = Math.max(
 						maxContentRight,
@@ -642,9 +646,7 @@
 				contentRow
 					.style(
 						"min-height",
-						`${Math.ceil(
-							maxContentBottom
-						)}px`
+						null
 					)
 					.style(
 						"min-width",
@@ -652,29 +654,6 @@
 							maxContentRight
 						)}px`
 					);
-
-				const headerHeight =
-					headerRow.node()
-						? headerRow
-							.node()
-							.getBoundingClientRect()
-							.height
-						: 0;
-
-				const logoHeight =
-					logoRow.node() &&
-						logoRow.node().children
-							.length > 0
-						? logoRow
-							.node()
-							.getBoundingClientRect()
-							.height
-						: 0;
-
-				const totalRequiredHeight =
-					headerHeight +
-					maxContentBottom +
-					logoHeight;
 
 				let maxRight = maxContentRight;
 
@@ -688,6 +667,9 @@
 							.node()
 							.getBoundingClientRect();
 
+					const wrapperRect =
+						wrapperNode.getBoundingClientRect();
+
 					maxRight = Math.max(
 						maxRight,
 						logoRect.right -
@@ -698,10 +680,7 @@
 				chartWrapper
 					.style(
 						"min-height",
-						`${Math.ceil(
-							totalRequiredHeight +
-							layoutBuffer
-						)}px`
+						null
 					)
 					.style(
 						"min-width",
@@ -713,11 +692,11 @@
 				canvas
 					.style(
 						"padding-bottom",
-						`${layoutBuffer}px`
+						"0px"
 					)
 					.style(
 						"margin-bottom",
-						`${layoutBuffer}px`
+						"12px"
 					);
 			}
 
@@ -734,27 +713,6 @@
 			seriesColorMap,
 			fontScale
 		) {
-			const isHeaderType =
-				activeType === "stacked-bar" ||
-				activeType === "horizontal-stacked-bar" ||
-				activeType === "multi-line" ||
-				activeType === "stacked-area" ||
-				activeType === "heatmap";
-
-			if (!isHeaderType) {
-				headerRow.style(
-					"display",
-					"none"
-				);
-
-				headerLegend.style(
-					"display",
-					"none"
-				);
-
-				return;
-			}
-
 			headerRow.style(
 				"display",
 				"flex"
@@ -772,7 +730,11 @@
 				.style(
 					"font-size",
 					mainTitleSize
-				);
+				)
+				.style("word-wrap", "break-word")
+				.style("overflow-wrap", "break-word")
+				.style("white-space", "normal")
+				.style("width", "100%");
 
 			headerSubtitle
 				.text(subtitleValue)
@@ -783,7 +745,11 @@
 				.style(
 					"font-size",
 					subtitleSize
-				);
+				)
+				.style("word-wrap", "break-word")
+				.style("overflow-wrap", "break-word")
+				.style("white-space", "normal")
+				.style("width", "100%");
 
 			if (activeType === "heatmap") {
 				headerSubtitle.style(
@@ -797,11 +763,23 @@
 				);
 			}
 
-			if (activeType === "heatmap") {
+			const isMultiSeriesLegendType =
+				activeType === "stacked-bar" ||
+				activeType === "horizontal-stacked-bar" ||
+				activeType === "multi-line" ||
+				activeType === "stacked-area";
+
+			if (!isMultiSeriesLegendType) {
 				headerLegend.style(
 					"display",
 					"none"
 				);
+
+				if (activeType === "heatmap") {
+					headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
+				} else {
+					headerRow.style("margin-bottom", `${Math.round(-64 * currentFontScale)}px`);
+				}
 
 				return;
 			}
@@ -1201,33 +1179,15 @@
 				}
 			);
 
-			if (
-				activeType === "stacked-bar" ||
-				activeType === "horizontal-stacked-bar" ||
-				activeType === "multi-line" ||
-				activeType === "stacked-area" ||
-				activeType === "heatmap"
-			) {
-				mainTitleText.style(
-					"display",
-					"none"
-				);
+			mainTitleText.style(
+				"display",
+				"none"
+			);
 
-				subtitleText.style(
-					"display",
-					"none"
-				);
-			} else {
-				mainTitleText.style(
-					"display",
-					null
-				);
-
-				subtitleText.style(
-					"display",
-					null
-				);
-			}
+			subtitleText.style(
+				"display",
+				"none"
+			);
 
 			renderHTMLHeader(
 				mainTitleValue,
@@ -6935,7 +6895,7 @@
 					)
 					.style(
 						"padding-bottom",
-						`${Math.round(5 * fontScale)}px`
+						"0px"
 					)
 					.append(
 						"img"
