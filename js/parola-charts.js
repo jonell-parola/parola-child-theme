@@ -2376,6 +2376,52 @@
 						tickSize
 					);
 
+				// Rotate x-axis labels -45deg counterclockwise if they overlap
+				(function checkAndRotateXAxisLabels() {
+					const tickTexts = xAxisGroup.selectAll(".tick text").nodes();
+					if (tickTexts.length <= 1) {
+						return;
+					}
+
+					let hasOverlap = false;
+					for (let i = 0; i < tickTexts.length - 1; i++) {
+						const nodeA = tickTexts[i];
+						const nodeB = tickTexts[i + 1];
+
+						const rectA = nodeA.getBoundingClientRect();
+						const rectB = nodeB.getBoundingClientRect();
+
+						if (rectA && rectB && rectA.width > 0 && rectB.width > 0) {
+							if (rectA.right > rectB.left - 2) {
+								hasOverlap = true;
+								break;
+							}
+						} else if (nodeA.getBBox && nodeB.getBBox) {
+							const bboxA = nodeA.getBBox();
+							const bboxB = nodeB.getBBox();
+							const tickA = d3.select(nodeA.parentNode).datum();
+							const tickB = d3.select(nodeB.parentNode).datum();
+							const centerA = (xScale(tickA) || 0) + xScale.bandwidth() / 2;
+							const centerB = (xScale(tickB) || 0) + xScale.bandwidth() / 2;
+							const rightA = centerA + bboxA.width / 2;
+							const leftB = centerB - bboxB.width / 2;
+							if (rightA > leftB - 2) {
+								hasOverlap = true;
+								break;
+							}
+						}
+					}
+
+					if (hasOverlap) {
+						xAxisGroup
+							.selectAll("text")
+							.attr("text-anchor", "end")
+							.attr("transform", "rotate(-45)")
+							.attr("dx", "-0.6em")
+							.attr("dy", "0.2em");
+					}
+				})();
+
 
 				const barPaths =
 					svg
@@ -3257,6 +3303,52 @@
 						"font-size",
 						tickSize
 					);
+
+				// Rotate x-axis labels -45deg counterclockwise if they overlap
+				(function checkAndRotateXAxisLabels() {
+					const tickTexts = xAxisGroup.selectAll(".tick text").nodes();
+					if (tickTexts.length <= 1) {
+						return;
+					}
+
+					let hasOverlap = false;
+					for (let i = 0; i < tickTexts.length - 1; i++) {
+						const nodeA = tickTexts[i];
+						const nodeB = tickTexts[i + 1];
+
+						const rectA = nodeA.getBoundingClientRect();
+						const rectB = nodeB.getBoundingClientRect();
+
+						if (rectA && rectB && rectA.width > 0 && rectB.width > 0) {
+							if (rectA.right > rectB.left - 2) {
+								hasOverlap = true;
+								break;
+							}
+						} else if (nodeA.getBBox && nodeB.getBBox) {
+							const bboxA = nodeA.getBBox();
+							const bboxB = nodeB.getBBox();
+							const tickA = d3.select(nodeA.parentNode).datum();
+							const tickB = d3.select(nodeB.parentNode).datum();
+							const centerA = (xScale(tickA) || 0) + xScale.bandwidth() / 2;
+							const centerB = (xScale(tickB) || 0) + xScale.bandwidth() / 2;
+							const rightA = centerA + bboxA.width / 2;
+							const leftB = centerB - bboxB.width / 2;
+							if (rightA > leftB - 2) {
+								hasOverlap = true;
+								break;
+							}
+						}
+					}
+
+					if (hasOverlap) {
+						xAxisGroup
+							.selectAll("text")
+							.attr("text-anchor", "end")
+							.attr("transform", "rotate(-45)")
+							.attr("dx", "-0.6em")
+							.attr("dy", "0.2em");
+					}
+				})();
 
 				yAxisGroup.call(
 					d3.axisLeft(yScale)
