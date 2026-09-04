@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.76 - "v1.0.74 + v1.0.75 (title/subtitle wrapping & dead space adjustment) + v1.0.76 (dead space adjustment 2)"
+ * 1.0.78 - "v1.0.76 + v1.0.77 (x-axis label rotation) + v1.0.78 (extra logo top margin for rotated x-labels)"
  */
 (function () {
 
@@ -1006,6 +1006,8 @@
 			}
 
 			currentData = data;
+
+			let hasRotatedXLabels = false;
 
 			const activeType =
 				typePicker.property("value");
@@ -2377,10 +2379,10 @@
 					);
 
 				// Rotate x-axis labels -45deg counterclockwise if they overlap
-				(function checkAndRotateXAxisLabels() {
+				hasRotatedXLabels = (function checkAndRotateXAxisLabels() {
 					const tickTexts = xAxisGroup.selectAll(".tick text").nodes();
 					if (tickTexts.length <= 1) {
-						return;
+						return false;
 					}
 
 					let hasOverlap = false;
@@ -2419,7 +2421,9 @@
 							.attr("transform", "rotate(-45)")
 							.attr("dx", "-0.6em")
 							.attr("dy", "0.2em");
+						return true;
 					}
+					return false;
 				})();
 
 
@@ -3305,10 +3309,10 @@
 					);
 
 				// Rotate x-axis labels -45deg counterclockwise if they overlap
-				(function checkAndRotateXAxisLabels() {
+				hasRotatedXLabels = (function checkAndRotateXAxisLabels() {
 					const tickTexts = xAxisGroup.selectAll(".tick text").nodes();
 					if (tickTexts.length <= 1) {
-						return;
+						return false;
 					}
 
 					let hasOverlap = false;
@@ -3347,7 +3351,9 @@
 							.attr("transform", "rotate(-45)")
 							.attr("dx", "-0.6em")
 							.attr("dy", "0.2em");
+						return true;
 					}
+					return false;
 				})();
 
 				yAxisGroup.call(
@@ -6960,6 +6966,43 @@
 			logoRow
 				.selectAll("*")
 				.remove();
+
+			let extraLogoTop = 0;
+			if (hasRotatedXLabels) {
+				let maxLabelBottom = 0;
+				const svgRect = svgOuter.node() ? svgOuter.node().getBoundingClientRect() : null;
+
+				xAxisGroup.selectAll("text").each(function () {
+					const rect = this.getBoundingClientRect();
+					if (rect && rect.bottom > maxLabelBottom) {
+						maxLabelBottom = rect.bottom;
+					}
+				});
+
+				if (svgRect && maxLabelBottom > svgRect.bottom) {
+					extraLogoTop = Math.ceil(maxLabelBottom - svgRect.bottom + 8 * fontScale);
+				} else {
+					let maxLabelWidth = 0;
+					xAxisGroup.selectAll("text").each(function () {
+						if (this.getBBox) {
+							const w = this.getBBox().width;
+							if (w > maxLabelWidth) {
+								maxLabelWidth = w;
+							}
+						}
+					});
+					const verticalDrop = maxLabelWidth * Math.sin(Math.PI / 4) + parseInt(tickSize, 10);
+					if (verticalDrop > margin.bottom) {
+						extraLogoTop = Math.ceil(verticalDrop - margin.bottom + 8 * fontScale);
+					}
+				}
+			}
+
+			if (extraLogoTop > 0) {
+				logoRow.style("margin-top", `${extraLogoTop}px`);
+			} else {
+				logoRow.style("margin-top", "0px");
+			}
 
 			if (selectedLogo) {
 				const baseLogoWidth = Math.min(100, Math.max(45, containerWidth * 0.14));
