@@ -15,10 +15,13 @@ add_action( 'wp_enqueue_scripts', function() {
 add_action( 'init', function() {
   $element_files = [
     __DIR__ . '/elements/title.php',
+    __DIR__ . '/elements/d3-chart.php',
   ];
 
   foreach ( $element_files as $file ) {
-    \Bricks\Elements::register_element( $file );
+    if ( file_exists( $file ) ) {
+      \Bricks\Elements::register_element( $file );
+    }
   }
 }, 11 );
 
@@ -268,9 +271,9 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.74', // v1.0.73 chart work + restored Gutenberg preview/logo options
+        '1.0.79', // Adds Bricks D3 Chart media upload support.
         // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60", "1.0.62", "1.0.63", "1.0.64", "1.0.65", "1.0.66", "1.0.67", "1.0.68", "1.0.70"
-		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73"
+		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73", "1.0.74", "1.0.75", "1.0.76", "1.0.77"
 		// JONELL'S VERSION: "1.0.61"
         true
     );
@@ -476,7 +479,7 @@ function custom_d3_enqueue_editor_script() {
 		'parola-charts-editor',
 		get_stylesheet_directory_uri() . '/js/parola-charts.js',
 		array( 'papaparse-cdn-editor', 'd3-cdn-editor' ),
-		'1.0.74',
+		'1.0.79',
 		true
 	);
 
