@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.82 - 1.0.80 + Added toggles: Logo, Title, Subtitle, Axis Labels, Stack Totals, Data Labels
+ * 1.0.83 - 1.0.80 + Added toggles: Logo, Title, Subtitle, Axis Labels, Stack Totals, Data Labels + New Chart Type: "Frequency Table"
  */
 (function () {
 
@@ -290,6 +290,10 @@
 			{
 				value: "heatmap",
 				label: "Heatmaps"
+			},
+			{
+				value: "frequency-table",
+				label: "Frequency Table"
 			}
 		].forEach(function (item) {
 			const option = typePicker
@@ -297,7 +301,12 @@
 				.attr("value", item.value)
 				.text(item.label);
 
-			if (item.value === defaultChartType) {
+			const normalizedDefault = String(defaultChartType).trim().toLowerCase().replace(/[\s_]+/g, "-");
+			if (
+				item.value === defaultChartType ||
+				item.value === normalizedDefault ||
+				(item.value === "frequency-table" && (normalizedDefault === "frequencytable" || normalizedDefault === "frequency-table"))
+			) {
 				option.property("selected", true);
 			}
 		});
@@ -898,7 +907,7 @@
 					.style("white-space", "normal")
 					.style("width", "100%");
 
-				if (activeType === "heatmap") {
+				if (activeType === "heatmap" || activeType === "frequency-table") {
 					headerSubtitle.style(
 						"margin-bottom",
 						`${Math.max(6, Math.round(12 * currentFontScale))}px`
@@ -930,7 +939,7 @@
 				if (!hasAnyTitle) {
 					headerRow.style("display", "none");
 					headerRow.style("margin-bottom", "0px");
-				} else if (activeType === "heatmap") {
+				} else if (activeType === "heatmap" || activeType === "frequency-table") {
 					headerRow.style("display", "flex");
 					headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
 				} else {
@@ -1392,6 +1401,12 @@
 			contentRow
 				.selectAll(
 					`.heatmap-container-${uid}`
+				)
+				.remove();
+
+			contentRow
+				.selectAll(
+					`.frequency-table-container-${uid}`
 				)
 				.remove();
 
@@ -7351,6 +7366,384 @@
 					.text(
 						maxPctText
 					);
+			}
+
+			// =====================================================
+			// FREQUENCY TABLE
+			// =====================================================
+
+			else if (
+				activeType ===
+				"frequency-table"
+			) {
+				svgOuter.style(
+					"display",
+					"none"
+				);
+
+				// Reset headerRow margin so frequency table starts cleanly below the header
+				headerRow.style(
+					"margin-bottom",
+					`${Math.round(12 * fontScale)}px`
+				);
+
+				const tableWrapper =
+					contentRow
+						.append(
+							"div"
+						)
+						.attr(
+							"class",
+							`frequency-table-container-${uid}`
+						)
+						.style(
+							"width",
+							"100%"
+						)
+						.style(
+							"display",
+							"flex"
+						)
+						.style(
+							"flex-direction",
+							"column"
+						)
+						.style(
+							"font-family",
+							activeFont
+						)
+						.style(
+							"box-sizing",
+							"border-box"
+						);
+
+				const firstColKey =
+					categoryKey;
+
+				const secondColKey =
+					(valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
+					keys[0];
+
+				let maxVal = 0;
+				data.forEach(
+					function (row) {
+						const v =
+							parseFloat(
+								row[secondColKey]
+							) || 0;
+						if (v > maxVal) {
+							maxVal = v;
+						}
+					}
+				);
+
+				const table =
+					tableWrapper
+						.append(
+							"table"
+						)
+						.style(
+							"width",
+							"100%"
+						)
+						.style(
+							"border-collapse",
+							"collapse"
+						)
+						.style(
+							"border",
+							"none"
+						)
+						.style(
+							"table-layout",
+							"auto"
+						)
+						.style(
+							"font-size",
+							`${Math.max(12, Math.round(14 * fontScale))}px`
+						)
+						.style(
+							"color",
+							"#333"
+						);
+
+				const tbody =
+					table.append(
+						"tbody"
+					);
+
+				const rowPaddingV =
+					`${Math.max(8, Math.round(10 * fontScale))}px`;
+				const barThickness =
+					`${Math.max(8, Math.round(10 * fontScale))}px`;
+
+				data.forEach(
+					function (row) {
+						const tr =
+							tbody
+								.append(
+									"tr"
+								)
+								.style(
+									"border-bottom",
+									"1px solid #e5e5e5"
+								)
+								.style(
+									"transition",
+									"background-color 0.15s ease"
+								);
+
+						const firstColVal =
+							row[firstColKey] !== undefined
+								? row[firstColKey]
+								: "";
+
+						const rawVal =
+							row[secondColKey] !== undefined
+								? row[secondColKey]
+								: "";
+
+						const numericVal =
+							parseFloat(rawVal) || 0;
+
+						const fillPercent =
+							maxVal > 0
+								? Math.max(
+									0,
+									Math.min(
+										100,
+										(numericVal / maxVal) * 100
+									)
+								)
+								: 0;
+
+						// Column 1: First column data from CSV
+						tr.append(
+							"td"
+						)
+							.style(
+								"padding",
+								`${rowPaddingV} 16px`
+							)
+							.style(
+								"text-align",
+								"left"
+							)
+							.style(
+								"vertical-align",
+								"middle"
+							)
+							.style(
+								"border",
+								"none"
+							)
+							.style(
+								"border-bottom",
+								"1px solid #e5e5e5"
+							)
+							.style(
+								"white-space",
+								"nowrap"
+							)
+							.style(
+								"font-weight",
+								"500"
+							)
+							.style(
+								"color",
+								"#333"
+							)
+							.text(
+								firstColVal
+							);
+
+						// Column 2: Loading bar shape
+						const barTd =
+							tr.append(
+								"td"
+							)
+								.style(
+									"padding",
+									`${rowPaddingV} 16px`
+								)
+								.style(
+									"vertical-align",
+									"middle"
+								)
+								.style(
+									"border",
+									"none"
+								)
+								.style(
+									"border-bottom",
+									"1px solid #e5e5e5"
+								)
+								.style(
+									"width",
+									"100%"
+								);
+
+						const barTrack =
+							barTd.append(
+								"div"
+							)
+								.style(
+									"width",
+									"100%"
+								)
+								.style(
+									"height",
+									barThickness
+								)
+								.style(
+									"background-color",
+									"#e5e7eb"
+								)
+								.style(
+									"border-radius",
+									"9999px"
+								)
+								.style(
+									"overflow",
+									"hidden"
+								)
+								.style(
+									"position",
+									"relative"
+								)
+								.style(
+									"box-sizing",
+									"border-box"
+								);
+
+						barTrack
+							.append(
+								"div"
+							)
+							.style(
+								"width",
+								`${fillPercent}%`
+							)
+							.style(
+								"height",
+								"100%"
+							)
+							.style(
+								"background-color",
+								"rgb(28, 167, 166)"
+							)
+							.style(
+								"border-radius",
+								"9999px"
+							)
+							.style(
+								"transition",
+								"width 0.3s ease"
+							);
+
+						// Column 3: Second column data from CSV
+						const displayCount =
+							typeof rawVal === "number"
+								? rawVal.toLocaleString()
+								: String(rawVal);
+
+						tr.append(
+							"td"
+						)
+							.style(
+								"padding",
+								`${rowPaddingV} 16px`
+							)
+							.style(
+								"text-align",
+								"right"
+							)
+							.style(
+								"vertical-align",
+								"middle"
+							)
+							.style(
+								"border",
+								"none"
+							)
+							.style(
+								"border-bottom",
+								"1px solid #e5e5e5"
+							)
+							.style(
+								"white-space",
+								"nowrap"
+							)
+							.style(
+								"font-weight",
+								"600"
+							)
+							.style(
+								"color",
+								"#333"
+							)
+							.text(
+								displayCount
+							);
+
+						// Tooltip and hover interaction
+						const desc =
+							descriptionKey
+								? row[descriptionKey]
+								: (currentDescriptions[firstColVal] || null);
+
+						const tooltipContent =
+							`<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displayCount}`;
+
+						tr.on(
+							"mouseover",
+							function () {
+								d3.select(this).style(
+									"background-color",
+									"#f9fafb"
+								);
+								tooltip
+									.html(
+										formatTooltipContent(
+											tooltipContent,
+											desc
+										)
+									)
+									.style(
+										"visibility",
+										"visible"
+									);
+							}
+						)
+							.on(
+								"mousemove",
+								function (event) {
+									tooltip
+										.style(
+											"top",
+											`${event.pageY + 10}px`
+										)
+										.style(
+											"left",
+											`${event.pageX + 10}px`
+										);
+								}
+							)
+							.on(
+								"mouseout",
+								function () {
+									d3.select(this).style(
+										"background-color",
+										"transparent"
+									);
+									tooltip.style(
+										"visibility",
+										"hidden"
+									);
+								}
+							);
+					}
+				);
 			} else {
 				svgOuter.style(
 					"display",
