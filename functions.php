@@ -914,3 +914,22 @@ function custom_d3_hide_controls_for_guests_js() {
 	</script>
 	<?php
 }
+
+
+/**
+ * Register Parola Data Blocks custom Bricks element.
+ */
+add_action( 'init', function() {
+
+	$element_file = __DIR__ . '/elements/parola-data-blocks.php';
+
+	if ( file_exists( $element_file ) ) {
+
+		\Bricks\Elements::register_element(
+			$element_file,
+			'parola-data-blocks',
+			'Parola_Data_Blocks_Element'
+		);
+	}
+
+}, 11 );
