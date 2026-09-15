@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.78 - "v1.0.76 + v1.0.77 (x-axis label rotation) + v1.0.78 (extra logo top margin for rotated x-labels)"
+ * 1.0.82 - 1.0.80 + Added toggles: Logo, Title, Subtitle, Axis Labels, Stack Totals, Data Labels
  */
 (function () {
 
@@ -87,6 +87,14 @@
 		let currentDescriptions = {};
 		let cpcSortMode = "original"; // "original", "asc" (A-Z), "desc" (Z-A)
 
+		function parseBoolAttr(val, defaultVal) {
+			if (val === undefined || val === null || val === "") return defaultVal;
+			const s = String(val).trim().toLowerCase();
+			if (s === "false" || s === "0" || s === "no" || s === "off" || s === "none") return false;
+			if (s === "true" || s === "1" || s === "yes" || s === "on") return true;
+			return defaultVal;
+		}
+
 		// Read configuration from each individual chart container.
 		const defaultCsv =
 			canvas.attr("data-csv-url") ||
@@ -95,11 +103,52 @@
 
 		const defaultChartType =
 			canvas.attr("chart-type") ||
+			canvas.attr("data-chart-type") ||
 			"bar";
 
 		const defaultLogoStyle =
 			canvas.attr("logo-style") ||
+			canvas.attr("data-logo-style") ||
 			"parola logo with text.png";
+
+		const defaultShowLogo = parseBoolAttr(
+			canvas.attr("data-show-logo") || canvas.attr("show-logo"),
+			true
+		);
+
+		const defaultShowTitle = parseBoolAttr(
+			canvas.attr("data-show-title") || canvas.attr("show-title"),
+			true
+		);
+
+		const defaultShowSubtitle = parseBoolAttr(
+			canvas.attr("data-show-subtitle") || canvas.attr("show-subtitle"),
+			true
+		);
+
+		const defaultShowStackTotals = parseBoolAttr(
+			canvas.attr("data-show-stack-totals") ||
+			canvas.attr("show-stack-totals") ||
+			canvas.attr("data-stack-totals") ||
+			canvas.attr("stack-totals"),
+			true
+		);
+
+		const defaultShowDataLabels = parseBoolAttr(
+			canvas.attr("data-show-data-labels") ||
+			canvas.attr("show-data-labels") ||
+			canvas.attr("data-data-labels") ||
+			canvas.attr("data-labels"),
+			false
+		);
+
+		const defaultShowAxisLabels = parseBoolAttr(
+			canvas.attr("data-show-axis-labels") ||
+			canvas.attr("show-axis-labels") ||
+			canvas.attr("data-axis-labels") ||
+			canvas.attr("axis-labels"),
+			true
+		);
 
 		const activeFont = "Inter";
 
@@ -131,16 +180,13 @@
 			.style("gap", "15px");
 
 		// Gutenberg already has its own block controls.
-		// Hide the D3 frontend controls inside the live preview only.
+		// Hide the generated D3 settings when a CSV is supplied by Bricks/Gutenberg.
 		if (
-			canvasNode.classList.contains(
-				"d3-gutenberg-preview"
-			)
+			canvasNode.classList.contains("d3-gutenberg-preview") ||
+			canvasNode.classList.contains("d3-bricks-preview") ||
+			defaultCsv
 		) {
-			controls.style(
-				"display",
-				"none"
-			);
+			controls.style("display", "none");
 		}
 
 		function createInputGroup(
@@ -300,6 +346,103 @@
 				option.property("selected", true);
 			}
 		});
+
+		// =========================================================
+		// DISPLAY & STACKED TOGGLES
+		// =========================================================
+
+		function createCheckboxControl(parent, labelText, id, defaultChecked) {
+			const label = parent
+				.append("label")
+				.style("display", "flex")
+				.style("align-items", "center")
+				.style("gap", "8px")
+				.style("font-weight", "500")
+				.style("color", "#444")
+				.style("cursor", "pointer")
+				.style("user-select", "none");
+
+			const input = label
+				.append("input")
+				.attr("type", "checkbox")
+				.attr("id", id)
+				.property("checked", defaultChecked)
+				.style("cursor", "pointer")
+				.style("width", "16px")
+				.style("height", "16px")
+				.style("margin", "0");
+
+			label.append("span").text(labelText);
+
+			return input;
+		}
+
+		const displayOptionsWrapper = controls
+			.append("div")
+			.style("display", "flex")
+			.style("flex-direction", "column")
+			.style("gap", "8px");
+
+		displayOptionsWrapper
+			.append("label")
+			.text("Display Options:")
+			.style("font-weight", "bold")
+			.style("color", "#444");
+
+		const showLogoCheckbox = createCheckboxControl(
+			displayOptionsWrapper,
+			"Show Logo",
+			`show-logo-${uid}`,
+			defaultShowLogo
+		);
+
+		const showTitleCheckbox = createCheckboxControl(
+			displayOptionsWrapper,
+			"Show Title",
+			`show-title-${uid}`,
+			defaultShowTitle
+		);
+
+		const showSubtitleCheckbox = createCheckboxControl(
+			displayOptionsWrapper,
+			"Show Subtitle",
+			`show-subtitle-${uid}`,
+			defaultShowSubtitle
+		);
+
+		const showAxisLabelsCheckbox = createCheckboxControl(
+			displayOptionsWrapper,
+			"Show Axis Labels",
+			`show-axis-labels-${uid}`,
+			defaultShowAxisLabels
+		);
+
+		const stackedOptionsWrapper = controls
+			.append("div")
+			.attr("id", `stacked-options-wrapper-${uid}`)
+			.style("display", "flex")
+			.style("flex-direction", "column")
+			.style("gap", "8px");
+
+		stackedOptionsWrapper
+			.append("label")
+			.text("Stacked Chart Options:")
+			.style("font-weight", "bold")
+			.style("color", "#444");
+
+		const showStackTotalsCheckbox = createCheckboxControl(
+			stackedOptionsWrapper,
+			"Show Stack Totals",
+			`show-stack-totals-${uid}`,
+			defaultShowStackTotals
+		);
+
+		const showDataLabelsCheckbox = createCheckboxControl(
+			stackedOptionsWrapper,
+			"Show Data Labels",
+			`show-data-labels-${uid}`,
+			defaultShowDataLabels
+		);
 
 		// Locate the JavaScript asset directory for logo files.
 		let themeJsUrl = "";
@@ -711,56 +854,63 @@
 			valueKeys,
 			tickSize,
 			seriesColorMap,
-			fontScale
+			fontScale,
+			showTitle = true,
+			showSubtitle = true
 		) {
-			headerRow.style(
-				"display",
-				"flex"
-			);
-
 			const currentFontScale = fontScale || 1;
 			const subtitleSize = `${Math.round(parseInt(mainTitleSize, 10) * (16 / 22))}px`;
 
-			headerTitle
-				.text(mainTitleValue)
-				.style(
-					"font-family",
-					activeFont
-				)
-				.style(
-					"font-size",
-					mainTitleSize
-				)
-				.style("word-wrap", "break-word")
-				.style("overflow-wrap", "break-word")
-				.style("white-space", "normal")
-				.style("width", "100%");
-
-			headerSubtitle
-				.text(subtitleValue)
-				.style(
-					"font-family",
-					activeFont
-				)
-				.style(
-					"font-size",
-					subtitleSize
-				)
-				.style("word-wrap", "break-word")
-				.style("overflow-wrap", "break-word")
-				.style("white-space", "normal")
-				.style("width", "100%");
-
-			if (activeType === "heatmap") {
-				headerSubtitle.style(
-					"margin-bottom",
-					`${Math.max(6, Math.round(12 * currentFontScale))}px`
-				);
+			if (showTitle) {
+				headerTitle
+					.style("display", "block")
+					.text(mainTitleValue)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-size",
+						mainTitleSize
+					)
+					.style("word-wrap", "break-word")
+					.style("overflow-wrap", "break-word")
+					.style("white-space", "normal")
+					.style("width", "100%");
 			} else {
-				headerSubtitle.style(
-					"margin-bottom",
-					"0px"
-				);
+				headerTitle.style("display", "none");
+			}
+
+			if (showSubtitle) {
+				headerSubtitle
+					.style("display", "block")
+					.text(subtitleValue)
+					.style(
+						"font-family",
+						activeFont
+					)
+					.style(
+						"font-size",
+						subtitleSize
+					)
+					.style("word-wrap", "break-word")
+					.style("overflow-wrap", "break-word")
+					.style("white-space", "normal")
+					.style("width", "100%");
+
+				if (activeType === "heatmap") {
+					headerSubtitle.style(
+						"margin-bottom",
+						`${Math.max(6, Math.round(12 * currentFontScale))}px`
+					);
+				} else {
+					headerSubtitle.style(
+						"margin-bottom",
+						"0px"
+					);
+				}
+			} else {
+				headerSubtitle.style("display", "none");
 			}
 
 			const isMultiSeriesLegendType =
@@ -769,20 +919,30 @@
 				activeType === "multi-line" ||
 				activeType === "stacked-area";
 
+			const hasAnyTitle = showTitle || showSubtitle;
+
 			if (!isMultiSeriesLegendType) {
 				headerLegend.style(
 					"display",
 					"none"
 				);
 
-				if (activeType === "heatmap") {
+				if (!hasAnyTitle) {
+					headerRow.style("display", "none");
+					headerRow.style("margin-bottom", "0px");
+				} else if (activeType === "heatmap") {
+					headerRow.style("display", "flex");
 					headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
 				} else {
-					headerRow.style("margin-bottom", `${Math.round(-64 * currentFontScale)}px`);
+					headerRow.style("display", "flex");
+					const offset = (!showTitle || !showSubtitle) ? -38 : -64;
+					headerRow.style("margin-bottom", `${Math.round(offset * currentFontScale)}px`);
 				}
 
 				return;
 			}
+
+			headerRow.style("display", "flex");
 
 			headerLegend
 				.selectAll("*")
@@ -818,7 +978,7 @@
 				return fallbackColorScale(key);
 			};
 
-			const marginTop = Math.round(32 * currentFontScale);
+			const marginTop = hasAnyTitle ? Math.round(32 * currentFontScale) : 0;
 			headerLegend.style("margin-top", `${marginTop}px`);
 
 			if (
@@ -833,7 +993,12 @@
 				headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
 			} else {
 				headerLegend.style("margin-bottom", "0px");
-				headerRow.style("margin-bottom", `${Math.round(-64 * currentFontScale)}px`);
+				if (!hasAnyTitle) {
+					headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
+				} else {
+					const offset = (!showTitle || !showSubtitle) ? -38 : -64;
+					headerRow.style("margin-bottom", `${Math.round(offset * currentFontScale)}px`);
+				}
 			}
 
 			const legendGap = Math.max(8, Math.round(20 * currentFontScale));
@@ -1191,6 +1356,24 @@
 				"none"
 			);
 
+			const showLogo =
+				showLogoCheckbox.property("checked");
+
+			const showTitle =
+				showTitleCheckbox.property("checked");
+
+			const showSubtitle =
+				showSubtitleCheckbox.property("checked");
+
+			const showStackTotals =
+				showStackTotalsCheckbox.property("checked");
+
+			const showDataLabels =
+				showDataLabelsCheckbox.property("checked");
+
+			const showAxisLabels =
+				showAxisLabelsCheckbox.property("checked");
+
 			renderHTMLHeader(
 				mainTitleValue,
 				subtitleValue,
@@ -1199,7 +1382,9 @@
 				valueKeys,
 				tickSize,
 				undefined,
-				fontScale
+				fontScale,
+				showTitle,
+				showSubtitle
 			);
 
 			applyChartContainerStyles();
@@ -3614,36 +3799,85 @@
 					.selectAll(
 						".total-label"
 					)
-					.data(
-						data
-					)
-					.enter()
-					.append(
-						"text"
-					)
-					.attr(
-						"class",
-						"total-label"
-					)
-					.attr(
-						"x",
-						function (row) {
-							return (
-								xScale(
-									row[
-									categoryKey
-									]
-								) +
-								xScale.bandwidth() /
-								2
-							);
-						}
-					)
-					.attr(
-						"y",
-						function (row) {
-							const total =
-								d3.sum(
+					.remove();
+
+				if (showStackTotals) {
+					svg
+						.selectAll(
+							".total-label"
+						)
+						.data(
+							data
+						)
+						.enter()
+						.append(
+							"text"
+						)
+						.attr(
+							"class",
+							"total-label"
+						)
+						.attr(
+							"x",
+							function (row) {
+								return (
+									xScale(
+										row[
+										categoryKey
+										]
+									) +
+									xScale.bandwidth() /
+									2
+								);
+							}
+						)
+						.attr(
+							"y",
+							function (row) {
+								const total =
+									d3.sum(
+										valueKeys,
+										function (
+											key
+										) {
+											return (
+												row[
+												key
+												] || 0
+											);
+										}
+									);
+
+								return (
+									yScale(
+										total
+									) - 5
+								);
+							}
+						)
+						.attr(
+							"text-anchor",
+							"middle"
+						)
+						.attr(
+							"fill",
+							"#333"
+						)
+						.style(
+							"font-weight",
+							"bold"
+						)
+						.style(
+							"font-family",
+							activeFont
+						)
+						.style(
+							"font-size",
+							tickSize
+						)
+						.text(
+							function (row) {
+								return d3.sum(
 									valueKeys,
 									function (
 										key
@@ -3655,50 +3889,105 @@
 										);
 									}
 								);
+							}
+						);
+				}
 
-							return (
+				svg
+					.selectAll(
+						".stack-label"
+					)
+					.remove();
+
+				if (showDataLabels) {
+					stackedData.forEach(function (layer) {
+						layer.forEach(function (segment) {
+							const segmentValue =
+								segment[1] - segment[0];
+
+							if (segmentValue <= 0) {
+								return;
+							}
+
+							const bx =
+								xScale(
+									segment.data[
+									categoryKey
+									]
+								);
+
+							const by =
 								yScale(
-									total
-								) - 5
-							);
-						}
-					)
-					.attr(
-						"text-anchor",
-						"middle"
-					)
-					.attr(
-						"fill",
-						"#333"
-					)
-					.style(
-						"font-weight",
-						"bold"
-					)
-					.style(
-						"font-family",
-						activeFont
-					)
-					.style(
-						"font-size",
-						tickSize
-					)
-					.text(
-						function (row) {
-							return d3.sum(
-								valueKeys,
-								function (
-									key
-								) {
-									return (
-										row[
-										key
-										] || 0
+									segment[1]
+								);
+
+							const bw =
+								xScale.bandwidth();
+
+							const bh =
+								yScale(
+									segment[0]
+								) -
+								yScale(
+									segment[1]
+								);
+
+							if (
+								bh >= 14 * fontScale &&
+								bw >= 16
+							) {
+								svg.append("text")
+									.attr(
+										"class",
+										"stack-label"
+									)
+									.attr(
+										"x",
+										bx + bw / 2
+									)
+									.attr(
+										"y",
+										by + bh / 2
+									)
+									.attr(
+										"text-anchor",
+										"middle"
+									)
+									.attr(
+										"alignment-baseline",
+										"middle"
+									)
+									.attr(
+										"dominant-baseline",
+										"central"
+									)
+									.attr(
+										"fill",
+										"#ffffff"
+									)
+									.style(
+										"font-weight",
+										"600"
+									)
+									.style(
+										"font-family",
+										activeFont
+									)
+									.style(
+										"font-size",
+										`${Math.max(10, Math.round(12 * fontScale))}px`
+									)
+									.style(
+										"pointer-events",
+										"none"
+									)
+									.text(
+										segmentValue
 									);
-								}
-							);
-						}
-					);
+							}
+						});
+					});
+				}
 			}
 
 			// =====================================================
@@ -4099,22 +4388,89 @@
 					.selectAll(
 						".total-label"
 					)
-					.data(
-						data
-					)
-					.enter()
-					.append(
-						"text"
-					)
-					.attr(
-						"class",
-						"total-label"
-					)
-					.attr(
-						"x",
-						function (row) {
-							const total =
-								d3.sum(
+					.remove();
+
+				if (showStackTotals) {
+					svg
+						.selectAll(
+							".total-label"
+						)
+						.data(
+							data
+						)
+						.enter()
+						.append(
+							"text"
+						)
+						.attr(
+							"class",
+							"total-label"
+						)
+						.attr(
+							"x",
+							function (row) {
+								const total =
+									d3.sum(
+										valueKeys,
+										function (
+											key
+										) {
+											return (
+												row[
+												key
+												] || 0
+											);
+										}
+									);
+
+								return (
+									xScale(
+										total
+									) + 5
+								);
+							}
+						)
+						.attr(
+							"y",
+							function (row) {
+								return (
+									yScale(
+										row[
+										categoryKey
+										]
+									) +
+									yScale.bandwidth() /
+									2
+								);
+							}
+						)
+						.attr(
+							"alignment-baseline",
+							"middle"
+						)
+						.attr(
+							"dominant-baseline",
+							"central"
+						)
+						.attr(
+							"fill",
+							"#333"
+						)
+						.style(
+							"font-weight",
+							"bold"
+						)
+						.style(
+							"font-family",
+							activeFont
+						)
+						.style(
+							"font-size",
+							tickSize
+						)
+						.text(
+							function (row) {
+								return d3.sum(
 									valueKeys,
 									function (
 										key
@@ -4126,85 +4482,126 @@
 										);
 									}
 								);
+							}
+						)
+						.each(
+							function () {
+								const bbox =
+									this.getBBox();
 
-							return (
-								xScale(
-									total
-								) + 5
-							);
-						}
+								if (
+									bbox.x +
+									bbox.width >
+									dynamicActiveWidth
+								) {
+									d3
+										.select(
+											this
+										)
+										.style(
+											"display",
+											"none"
+										);
+								}
+							}
+						);
+				}
+
+				svg
+					.selectAll(
+						".stack-label"
 					)
-					.attr(
-						"y",
-						function (row) {
-							return (
+					.remove();
+
+				if (showDataLabels) {
+					stackedData.forEach(function (layer) {
+						layer.forEach(function (segment) {
+							const segmentValue =
+								segment[1] - segment[0];
+
+							if (segmentValue <= 0) {
+								return;
+							}
+
+							const bx =
+								xScale(
+									segment[0]
+								);
+
+							const by =
 								yScale(
-									row[
+									segment.data[
 									categoryKey
 									]
-								) +
-								yScale.bandwidth() /
-								2
-							);
-						}
-					)
-					.attr(
-						"alignment-baseline",
-						"middle"
-					)
-					.attr(
-						"fill",
-						"#333"
-					)
-					.style(
-						"font-weight",
-						"bold"
-					)
-					.style(
-						"font-family",
-						activeFont
-					)
-					.style(
-						"font-size",
-						tickSize
-					)
-					.text(
-						function (row) {
-							return d3.sum(
-								valueKeys,
-								function (
-									key
-								) {
-									return (
-										row[
-										key
-										] || 0
-									);
-								}
-							);
-						}
-					)
-					.each(
-						function () {
-							const bbox =
-								this.getBBox();
+								);
+
+							const bw =
+								xScale(
+									segment[1]
+								) -
+								xScale(
+									segment[0]
+								);
+
+							const bh =
+								yScale.bandwidth();
 
 							if (
-								bbox.x +
-								bbox.width >
-								dynamicActiveWidth
+								bw >= 18 * fontScale &&
+								bh >= 10
 							) {
-								d3
-									.select(
-										this
+								svg.append("text")
+									.attr(
+										"class",
+										"stack-label"
+									)
+									.attr(
+										"x",
+										bx + bw / 2
+									)
+									.attr(
+										"y",
+										by + bh / 2
+									)
+									.attr(
+										"text-anchor",
+										"middle"
+									)
+									.attr(
+										"alignment-baseline",
+										"middle"
+									)
+									.attr(
+										"dominant-baseline",
+										"central"
+									)
+									.attr(
+										"fill",
+										"#ffffff"
 									)
 									.style(
-										"display",
+										"font-weight",
+										"600"
+									)
+									.style(
+										"font-family",
+										activeFont
+									)
+									.style(
+										"font-size",
+										`${Math.max(10, Math.round(12 * fontScale))}px`
+									)
+									.style(
+										"pointer-events",
 										"none"
+									)
+									.text(
+										segmentValue
 									);
 							}
-						}
-					);
+						});
+					});
+				}
 			}
 
 			// =====================================================
@@ -4309,7 +4706,9 @@
 					sortedKeys,
 					tickSize,
 					seriesColorMap,
-					fontScale
+					fontScale,
+					showTitle,
+					showSubtitle
 				);
 
 				const categories =
@@ -6959,6 +7358,14 @@
 				);
 			}
 
+			if (!showAxisLabels) {
+				xAxisGroup.selectAll("text").style("display", "none");
+				yAxisGroup.selectAll("text").style("display", "none");
+			} else {
+				xAxisGroup.selectAll("text").style("display", null);
+				yAxisGroup.selectAll("text").style("display", null);
+			}
+
 			// =====================================================
 			// LOGO
 			// =====================================================
@@ -6967,44 +7374,46 @@
 				.selectAll("*")
 				.remove();
 
-			let extraLogoTop = 0;
-			if (hasRotatedXLabels) {
-				let maxLabelBottom = 0;
-				const svgRect = svgOuter.node() ? svgOuter.node().getBoundingClientRect() : null;
+			if (showLogo && selectedLogo) {
+				logoRow.style("display", "flex");
 
-				xAxisGroup.selectAll("text").each(function () {
-					const rect = this.getBoundingClientRect();
-					if (rect && rect.bottom > maxLabelBottom) {
-						maxLabelBottom = rect.bottom;
-					}
-				});
+				let extraLogoTop = 0;
+				if (hasRotatedXLabels && showAxisLabels) {
+					let maxLabelBottom = 0;
+					const svgRect = svgOuter.node() ? svgOuter.node().getBoundingClientRect() : null;
 
-				if (svgRect && maxLabelBottom > svgRect.bottom) {
-					extraLogoTop = Math.ceil(maxLabelBottom - svgRect.bottom + 8 * fontScale);
-				} else {
-					let maxLabelWidth = 0;
 					xAxisGroup.selectAll("text").each(function () {
-						if (this.getBBox) {
-							const w = this.getBBox().width;
-							if (w > maxLabelWidth) {
-								maxLabelWidth = w;
-							}
+						const rect = this.getBoundingClientRect();
+						if (rect && rect.bottom > maxLabelBottom) {
+							maxLabelBottom = rect.bottom;
 						}
 					});
-					const verticalDrop = maxLabelWidth * Math.sin(Math.PI / 4) + parseInt(tickSize, 10);
-					if (verticalDrop > margin.bottom) {
-						extraLogoTop = Math.ceil(verticalDrop - margin.bottom + 8 * fontScale);
+
+					if (svgRect && maxLabelBottom > svgRect.bottom) {
+						extraLogoTop = Math.ceil(maxLabelBottom - svgRect.bottom + 8 * fontScale);
+					} else {
+						let maxLabelWidth = 0;
+						xAxisGroup.selectAll("text").each(function () {
+							if (this.getBBox) {
+								const w = this.getBBox().width;
+								if (w > maxLabelWidth) {
+									maxLabelWidth = w;
+								}
+							}
+						});
+						const verticalDrop = maxLabelWidth * Math.sin(Math.PI / 4) + parseInt(tickSize, 10);
+						if (verticalDrop > margin.bottom) {
+							extraLogoTop = Math.ceil(verticalDrop - margin.bottom + 8 * fontScale);
+						}
 					}
 				}
-			}
 
-			if (extraLogoTop > 0) {
-				logoRow.style("margin-top", `${extraLogoTop}px`);
-			} else {
-				logoRow.style("margin-top", "0px");
-			}
+				if (extraLogoTop > 0) {
+					logoRow.style("margin-top", `${extraLogoTop}px`);
+				} else {
+					logoRow.style("margin-top", "0px");
+				}
 
-			if (selectedLogo) {
 				const baseLogoWidth = Math.min(100, Math.max(45, containerWidth * 0.14));
 				const logoWidth = Math.round(baseLogoWidth * fontScale);
 
@@ -7058,6 +7467,9 @@
 						"object-fit",
 						"contain"
 					);
+			} else {
+				logoRow.style("display", "none");
+				logoRow.style("margin-top", "0px");
 			}
 
 			updateChartWrapperLayout();
@@ -7083,6 +7495,90 @@
 		);
 
 		logoPicker.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showLogoCheckbox.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showTitleCheckbox.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showSubtitleCheckbox.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showStackTotalsCheckbox.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showDataLabelsCheckbox.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showAxisLabelsCheckbox.on(
 			"change",
 			function () {
 				if (
