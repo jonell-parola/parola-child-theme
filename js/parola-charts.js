@@ -20,76 +20,41 @@
 	// =========================================================
 
 	function initializeParolaCharts(rootNode) {
+	const root = rootNode || document;
+	const canvases = [];
 
-		const root =
-			rootNode || document;
-
-		const canvases = [];
-
-
-		// Root itself may be a chart.
-		if (
-			root.nodeType === 1 &&
-			root.matches &&
-			root.matches(".d3-test-canvas")
-		) {
-			canvases.push(root);
-		}
-
-
-		// Find charts inside root.
-		if (root.querySelectorAll) {
-
-			root
-				.querySelectorAll(
-					".d3-test-canvas"
-				)
-				.forEach(
-					function (canvasNode) {
-
-						canvases.push(
-							canvasNode
-						);
-					}
-				);
-		}
-
-						canvases.push(
-							canvasNode
-						);
-					}
-				);
-		}
-
-		canvases.forEach(
-			function (canvasNode) {
-
-				// Prevent the same DOM element from initializing twice.
-				if (
-					canvasNode.dataset.parolaInitialized ===
-					"1"
-				) {
-					return;
-				}
-
-				canvasNode.dataset.parolaInitialized =
-					"1";
-
-				initChart(
-					canvasNode,
-					parolaInstanceCounter++
-				);
-			}
-		);
+	// Root itself may be a chart.
+	if (
+		root.nodeType === 1 &&
+		root.matches &&
+		root.matches(".d3-test-canvas")
+	) {
+		canvases.push(root);
 	}
 
-				initChart(
-					canvasNode,
-					parolaInstanceCounter++
-				);
-			}
-		);
+	// Find charts inside root.
+	if (root.querySelectorAll) {
+		root
+			.querySelectorAll(".d3-test-canvas")
+			.forEach(function (canvasNode) {
+				canvases.push(canvasNode);
+			});
 	}
+
+	canvases.forEach(function (canvasNode) {
+		// Prevent the same DOM element from initializing twice.
+		if (canvasNode.dataset.parolaInitialized === "1") {
+			return;
+		}
+
+		canvasNode.dataset.parolaInitialized = "1";
+
+		initChart(
+			canvasNode,
+			parolaInstanceCounter++
+		);
+	});
+}
 
 	function initChart(canvasNode, instanceIndex) {
 		const canvas = d3.select(canvasNode);
