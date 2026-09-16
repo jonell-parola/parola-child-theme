@@ -280,6 +280,45 @@ function parola_enqueue_visualization_assets() {
 }
 add_action( 'wp_enqueue_scripts', 'parola_enqueue_visualization_assets' );
 
+
+/**
+ * Bricks builder preview refresh for the Parola D3 custom element.
+ *
+ * Bricks invokes the element's $scripts whenever the element is rendered
+ * or updated in the builder. Reinitialize any D3 Bricks previews from their
+ * latest data-* attributes so chart settings update immediately.
+ */
+function parola_register_bricks_d3_preview_refresh() {
+	if ( ! wp_script_is( 'parola-charts', 'enqueued' ) ) {
+		return;
+	}
+
+	wp_add_inline_script(
+		'parola-charts',
+		<<<'JS'
+window.parolaRefreshD3Chart = function () {
+	window.setTimeout(function () {
+		if (typeof window.parolaInitializeCharts !== 'function') {
+			return;
+		}
+
+		var canvases = document.querySelectorAll('.d3-bricks-preview');
+
+		canvases.forEach(function (canvas) {
+			canvas.dataset.parolaInitialized = '0';
+			canvas.innerHTML = '';
+			window.parolaInitializeCharts(canvas);
+		});
+	}, 50);
+};
+JS
+		,
+		'after'
+	);
+}
+add_action( 'wp_enqueue_scripts', 'parola_register_bricks_d3_preview_refresh', 35 );
+
+
 /**Gutenberg editor control*/
 /**
  * Custom D3 Chart Gutenberg Block
@@ -361,6 +400,30 @@ function custom_d3_register_block() {
 					'type'    => 'string',
 					'default' => 'parola logo with text.png',
 				),
+				'showLogo' => array(
+					'type' => 'boolean',
+					'default' => true,
+				),
+				'showTitle' => array(
+					'type' => 'boolean',
+					'default' => true,
+				),
+				'showSubtitle' => array(
+					'type' => 'boolean',
+					'default' => true,
+				),
+				'showAxisLabels' => array(
+					'type' => 'boolean',
+					'default' => true,
+				),
+				'showDataLabels' => array(
+					'type' => 'boolean',
+					'default' => false,
+				),
+				'showStackTotals' => array(
+					'type' => 'boolean',
+					'default' => true,
+				),
 			),
 			'supports'        => array(
 				'multiple' => true,
@@ -393,6 +456,10 @@ function custom_d3_render_block( $attributes ) {
 		'stacked-bar',
 		'horizontal-bar',
 		'horizontal-stacked-bar',
+		'multi-line',
+		'stacked-area',
+		'heatmap',
+		'frequency-table',
 	);
 
 	$chart_type = isset( $attributes['chartType'] )
@@ -417,6 +484,15 @@ function custom_d3_render_block( $attributes ) {
 		$chart_type = 'bar';
 	}
 
+	$show_logo         = ! array_key_exists( 'showLogo', $attributes ) || (bool) $attributes['showLogo'];
+	$show_title        = ! array_key_exists( 'showTitle', $attributes ) || (bool) $attributes['showTitle'];
+	$show_subtitle     = ! array_key_exists( 'showSubtitle', $attributes ) || (bool) $attributes['showSubtitle'];
+	$show_axis_labels  = ! array_key_exists( 'showAxisLabels', $attributes ) || (bool) $attributes['showAxisLabels'];
+	$show_data_labels  = array_key_exists( 'showDataLabels', $attributes ) && (bool) $attributes['showDataLabels'];
+	$show_stack_totals = ! array_key_exists( 'showStackTotals', $attributes ) || (bool) $attributes['showStackTotals'];
+
+	$bool_attr = static function ( $value ) { return $value ? 'true' : 'false'; };
+
 	// Never trust the stored URL blindly — re-resolve it from the
 	// attachment ID every time the block renders.
 	$csv_url = '';
@@ -439,13 +515,19 @@ function custom_d3_render_block( $attributes ) {
 	}
 
 	return sprintf(
-		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" chart-type="%5$s" logo-style="%6$s"></div></div>',
+		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" data-chart-type="%5$s" data-logo-style="%6$s" data-show-logo="%7$s" data-show-title="%8$s" data-show-subtitle="%9$s" data-show-axis-labels="%10$s" data-show-data-labels="%11$s" data-show-stack-totals="%12$s"></div></div>',
 		$wrapper_attributes,
 		esc_attr( $canvas_id ),
 		esc_url( $csv_url ),
 		esc_attr( $csv_filename ),
 		esc_attr( $chart_type ),
-		esc_attr( $logo_style )
+		esc_attr( $logo_style ),
+		esc_attr( $bool_attr( $show_logo ) ),
+		esc_attr( $bool_attr( $show_title ) ),
+		esc_attr( $bool_attr( $show_subtitle ) ),
+		esc_attr( $bool_attr( $show_axis_labels ) ),
+		esc_attr( $bool_attr( $show_data_labels ) ),
+		esc_attr( $bool_attr( $show_stack_totals ) )
 	);
 }
 
@@ -479,7 +561,7 @@ function custom_d3_enqueue_editor_script() {
 		'parola-charts-editor',
 		get_stylesheet_directory_uri() . '/js/parola-charts.js',
 		array( 'papaparse-cdn-editor', 'd3-cdn-editor' ),
-		'1.0.79',
+		'1.0.83',
 		true
 	);
 
@@ -499,6 +581,11 @@ function custom_d3_enqueue_editor_script() {
 	);
 
 	wp_add_inline_script( 'custom-d3-editor-script', custom_d3_get_editor_js() );
+	wp_add_inline_script(
+		'custom-d3-editor-script',
+		custom_d3_builder_setting_sync_js(),
+		'after'
+	);
 	wp_enqueue_script( 'custom-d3-editor-script' );
 }
 
@@ -508,12 +595,14 @@ function custom_d3_get_editor_js() {
 ( function ( blocks, element, components, blockEditor, i18n ) {
 	var el                = element.createElement;
 	var registerBlockType = blocks.registerBlockType;
+	var useEffect          = element.useEffect;
 	var useBlockProps      = blockEditor.useBlockProps;
 	var MediaUpload        = blockEditor.MediaUpload;
 	var MediaUploadCheck   = blockEditor.MediaUploadCheck;
 	var Button             = components.Button;
 	var Notice             = components.Notice;
 	var SelectControl      = components.SelectControl;
+	var CheckboxControl    = components.CheckboxControl;
 	var __                 = i18n.__;
 
 	registerBlockType( 'custom-d3/chart-block', {
@@ -544,13 +633,59 @@ function custom_d3_get_editor_js() {
 			logoStyle: {
 				type: 'string',
 				default: 'parola logo with text.png'
-			}
+			},
+			showLogo: { type: 'boolean', default: true },
+			showTitle: { type: 'boolean', default: true },
+			showSubtitle: { type: 'boolean', default: true },
+			showAxisLabels: { type: 'boolean', default: true },
+			showDataLabels: { type: 'boolean', default: false },
+			showStackTotals: { type: 'boolean', default: true }
 		},
 
 		edit: function ( props ) {
 			var attributes    = props.attributes;
 			var setAttributes = props.setAttributes;
+			var clientId      = props.clientId;
 			var blockProps    = useBlockProps();
+
+			useEffect( function () {
+				if ( ! attributes.csvUrl ) {
+					return;
+				}
+
+				var timer = window.setTimeout( function () {
+					var selector = '.d3-gutenberg-preview[data-parola-block-id="' + clientId + '"]';
+					var canvas = document.querySelector( selector );
+
+					if ( ! canvas ) {
+						return;
+					}
+
+					// Rebuild this preview from the latest block attributes.
+					canvas.dataset.parolaInitialized = '0';
+					canvas.innerHTML = '';
+
+					if ( typeof window.parolaInitializeCharts === 'function' ) {
+						window.parolaInitializeCharts( canvas );
+					}
+				}, 80 );
+
+				return function () {
+					window.clearTimeout( timer );
+				};
+			}, [
+				clientId,
+				attributes.csvId,
+				attributes.csvUrl,
+				attributes.chartType,
+				attributes.logoStyle,
+				attributes.showLogo,
+				attributes.showTitle,
+				attributes.showSubtitle,
+				attributes.showAxisLabels,
+				attributes.showDataLabels,
+				attributes.showStackTotals
+			] );
 
 			function onSelectCsv( media ) {
 				if ( ! media || ! media.url ) {
@@ -633,7 +768,11 @@ function custom_d3_get_editor_js() {
 						{ label: __( 'Pie Chart', 'custom-d3' ), value: 'pie' },
 						{ label: __( 'Stacked Column Chart', 'custom-d3' ), value: 'stacked-bar' },
 						{ label: __( 'Bar', 'custom-d3' ), value: 'horizontal-bar' },
-						{ label: __( 'Stacked Bar Chart', 'custom-d3' ), value: 'horizontal-stacked-bar' }
+						{ label: __( 'Stacked Bar Chart', 'custom-d3' ), value: 'horizontal-stacked-bar' },
+						{ label: __( 'Multiple Line Chart', 'custom-d3' ), value: 'multi-line' },
+						{ label: __( 'Stacked Area Chart', 'custom-d3' ), value: 'stacked-area' },
+						{ label: __( 'Heatmaps', 'custom-d3' ), value: 'heatmap' },
+						{ label: __( 'Frequency Table', 'custom-d3' ), value: 'frequency-table' }
 					],
 					onChange: function ( value ) {
 						setAttributes( {
@@ -661,6 +800,36 @@ function custom_d3_get_editor_js() {
 				} )
 			);
 
+
+			children.push( el( 'div', { key: 'display-options-heading', style: { fontWeight: '600', marginTop: '18px', marginBottom: '8px' } }, __( 'Display Options', 'custom-d3' ) ) );
+			[
+				{ key: 'showLogo', label: __( 'Show Logo', 'custom-d3' ), defaultValue: true },
+				{ key: 'showTitle', label: __( 'Show Title', 'custom-d3' ), defaultValue: true },
+				{ key: 'showSubtitle', label: __( 'Show Subtitle', 'custom-d3' ), defaultValue: true },
+				{ key: 'showAxisLabels', label: __( 'Show Axis Labels', 'custom-d3' ), defaultValue: true }
+			].forEach( function ( option ) {
+				children.push( el( CheckboxControl, {
+					key: option.key,
+					label: option.label,
+					checked: attributes[ option.key ] !== undefined ? !! attributes[ option.key ] : option.defaultValue,
+					onChange: function ( value ) { var update = {}; update[ option.key ] = !! value; setAttributes( update ); }
+				} ) );
+			} );
+
+			children.push( el( 'div', { key: 'stacked-options-heading', style: { fontWeight: '600', marginTop: '18px', marginBottom: '8px' } }, __( 'Stacked Chart Options', 'custom-d3' ) ) );
+			children.push( el( CheckboxControl, {
+				key: 'show-data-labels',
+				label: __( 'Show Data Labels', 'custom-d3' ),
+				checked: !! attributes.showDataLabels,
+				onChange: function ( value ) { setAttributes( { showDataLabels: !! value } ); }
+			} ) );
+			children.push( el( CheckboxControl, {
+				key: 'show-stack-totals',
+				label: __( 'Show Stack Totals', 'custom-d3' ),
+				checked: attributes.showStackTotals !== undefined ? !! attributes.showStackTotals : true,
+				onChange: function ( value ) { setAttributes( { showStackTotals: !! value } ); }
+			} ) );
+
 			if ( hasCsv ) {
 				children.push(
 					el(
@@ -670,7 +839,13 @@ function custom_d3_get_editor_js() {
 								'preview-wrap-' +
 								attributes.csvId + '-' +
 								attributes.chartType + '-' +
-								attributes.logoStyle,
+								attributes.logoStyle + '-' +
+								String( attributes.showLogo ) + '-' +
+								String( attributes.showTitle ) + '-' +
+								String( attributes.showSubtitle ) + '-' +
+								String( attributes.showAxisLabels ) + '-' +
+								String( attributes.showDataLabels ) + '-' +
+								String( attributes.showStackTotals ),
 							style: {
 								marginTop: '25px',
 								paddingTop: '20px',
@@ -695,12 +870,25 @@ function custom_d3_get_editor_js() {
 									'chart-preview-' +
 									attributes.csvId + '-' +
 									attributes.chartType + '-' +
-									attributes.logoStyle,
+									attributes.logoStyle + '-' +
+									String( attributes.showLogo ) + '-' +
+									String( attributes.showTitle ) + '-' +
+									String( attributes.showSubtitle ) + '-' +
+									String( attributes.showAxisLabels ) + '-' +
+									String( attributes.showDataLabels ) + '-' +
+									String( attributes.showStackTotals ),
 								className: 'd3-test-canvas d3-gutenberg-preview',
+								'data-parola-block-id': clientId,
 								'data-csv-url': attributes.csvUrl,
 								'data-csv-filename': attributes.csvFilename || 'chart.csv',
-								'chart-type': attributes.chartType || 'bar',
-								'logo-style': attributes.logoStyle || 'parola logo with text.png',
+								'data-chart-type': attributes.chartType || 'bar',
+								'data-logo-style': attributes.logoStyle || 'parola logo with text.png',
+								'data-show-logo': attributes.showLogo !== false ? 'true' : 'false',
+								'data-show-title': attributes.showTitle !== false ? 'true' : 'false',
+								'data-show-subtitle': attributes.showSubtitle !== false ? 'true' : 'false',
+								'data-show-axis-labels': attributes.showAxisLabels !== false ? 'true' : 'false',
+								'data-show-data-labels': attributes.showDataLabels ? 'true' : 'false',
+								'data-show-stack-totals': attributes.showStackTotals !== false ? 'true' : 'false',
 								style: {
 									width: '100%',
 									minHeight: '300px',
@@ -734,6 +922,185 @@ function custom_d3_get_editor_js() {
 	<?php
 	return ob_get_clean();
 }
+
+
+/* =========================================================================
+ * 4B. D3 BUILDER SETTING SYNCHRONIZATION
+ *
+ * parola-charts.js reads the data-show-* attributes during initialization,
+ * then keeps the values in its internally generated checkbox controls.
+ * Gutenberg and Bricks can update attributes on an already initialized
+ * canvas, so synchronize those attribute changes back into the D3 controls.
+ * ========================================================================= */
+
+function custom_d3_builder_setting_sync_js() {
+	return <<<'JS'
+(function () {
+	var CONFIG = {
+		'data-show-logo': 'show-logo-',
+		'data-show-title': 'show-title-',
+		'data-show-subtitle': 'show-subtitle-',
+		'data-show-axis-labels': 'show-axis-labels-',
+		'data-show-data-labels': 'show-data-labels-',
+		'data-show-stack-totals': 'show-stack-totals-'
+	};
+
+	function parseBoolean(value, fallback) {
+		if (value === null || value === undefined || value === '') {
+			return fallback;
+		}
+
+		var normalized = String(value).trim().toLowerCase();
+
+		if (
+			normalized === 'false' ||
+			normalized === '0' ||
+			normalized === 'no' ||
+			normalized === 'off' ||
+			normalized === 'none'
+		) {
+			return false;
+		}
+
+		if (
+			normalized === 'true' ||
+			normalized === '1' ||
+			normalized === 'yes' ||
+			normalized === 'on'
+		) {
+			return true;
+		}
+
+		return fallback;
+	}
+
+	function syncOne(canvas, attributeName) {
+		var idPrefix = CONFIG[attributeName];
+
+		if (!idPrefix) {
+			return;
+		}
+
+		var checkbox = canvas.querySelector(
+			'input[type="checkbox"][id^="' + idPrefix + '"]'
+		);
+
+		if (!checkbox) {
+			return;
+		}
+
+		var defaults = {
+			'data-show-logo': true,
+			'data-show-title': true,
+			'data-show-subtitle': true,
+			'data-show-axis-labels': true,
+			'data-show-data-labels': false,
+			'data-show-stack-totals': true
+		};
+
+		var nextValue = parseBoolean(
+			canvas.getAttribute(attributeName),
+			defaults[attributeName]
+		);
+
+		if (checkbox.checked === nextValue) {
+			return;
+		}
+
+		checkbox.checked = nextValue;
+		checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+	}
+
+	function syncAll(canvas) {
+		Object.keys(CONFIG).forEach(function (attributeName) {
+			syncOne(canvas, attributeName);
+		});
+	}
+
+	function observeCanvas(canvas) {
+		if (!canvas || canvas.dataset.parolaSettingsObserved === '1') {
+			return;
+		}
+
+		canvas.dataset.parolaSettingsObserved = '1';
+
+		// Initial synchronization after the D3-generated controls exist.
+		window.setTimeout(function () {
+			syncAll(canvas);
+		}, 0);
+
+		var observer = new MutationObserver(function (mutations) {
+			mutations.forEach(function (mutation) {
+				if (
+					mutation.type === 'attributes' &&
+					CONFIG[mutation.attributeName]
+				) {
+					syncOne(canvas, mutation.attributeName);
+				}
+			});
+		});
+
+		observer.observe(canvas, {
+			attributes: true,
+			attributeFilter: Object.keys(CONFIG)
+		});
+	}
+
+	function scan(root) {
+		if (!root) {
+			return;
+		}
+
+		if (
+			root.nodeType === 1 &&
+			root.matches &&
+			root.matches('.d3-test-canvas')
+		) {
+			observeCanvas(root);
+		}
+
+		if (root.querySelectorAll) {
+			root.querySelectorAll('.d3-test-canvas').forEach(observeCanvas);
+		}
+	}
+
+	function start() {
+		scan(document);
+
+		var pageObserver = new MutationObserver(function (mutations) {
+			mutations.forEach(function (mutation) {
+				mutation.addedNodes.forEach(function (node) {
+					if (node.nodeType === 1) {
+						scan(node);
+					}
+				});
+			});
+		});
+
+		pageObserver.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+	}
+
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', start);
+	} else {
+		start();
+	}
+})();
+JS;
+}
+
+add_action( 'wp_enqueue_scripts', function() {
+	if ( wp_script_is( 'parola-charts', 'enqueued' ) ) {
+		wp_add_inline_script(
+			'parola-charts',
+			custom_d3_builder_setting_sync_js(),
+			'after'
+		);
+	}
+}, 30 );
 
 /* =========================================================================
  * 5. FRONT-END SCRIPT
