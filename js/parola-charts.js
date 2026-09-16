@@ -54,6 +54,12 @@
 				);
 		}
 
+						canvases.push(
+							canvasNode
+						);
+					}
+				);
+		}
 
 		canvases.forEach(
 			function (canvasNode) {
@@ -77,6 +83,13 @@
 		);
 	}
 
+				initChart(
+					canvasNode,
+					parolaInstanceCounter++
+				);
+			}
+		);
+	}
 
 	function initChart(canvasNode, instanceIndex) {
 		const canvas = d3.select(canvasNode);
