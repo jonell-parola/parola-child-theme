@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.83 - 1.0.80 + Added toggles: Logo, Title, Subtitle, Axis Labels, Stack Totals, Data Labels + New Chart Type: "Frequency Table"
+ * 1.0.84 - Toggle Data Labels for column & bar, Frequency table percentage number column, Hide title/subtitle removes their used space.
  */
 (function () {
 
@@ -20,12 +20,8 @@
 	// =========================================================
 
 	function initializeParolaCharts(rootNode) {
-
-		const root =
-			rootNode || document;
-
+		const root = rootNode || document;
 		const canvases = [];
-
 
 		// Root itself may be a chart.
 		if (
@@ -36,47 +32,29 @@
 			canvases.push(root);
 		}
 
-
 		// Find charts inside root.
 		if (root.querySelectorAll) {
-
 			root
-				.querySelectorAll(
-					".d3-test-canvas"
-				)
-				.forEach(
-					function (canvasNode) {
-
-						canvases.push(
-							canvasNode
-						);
-					}
-				);
+				.querySelectorAll(".d3-test-canvas")
+				.forEach(function (canvasNode) {
+					canvases.push(canvasNode);
+				});
 		}
 
-
-		canvases.forEach(
-			function (canvasNode) {
-
-				// Prevent the same DOM element from initializing twice.
-				if (
-					canvasNode.dataset.parolaInitialized ===
-					"1"
-				) {
-					return;
-				}
-
-				canvasNode.dataset.parolaInitialized =
-					"1";
-
-				initChart(
-					canvasNode,
-					parolaInstanceCounter++
-				);
+		canvases.forEach(function (canvasNode) {
+			// Prevent the same DOM element from initializing twice.
+			if (canvasNode.dataset.parolaInitialized === "1") {
+				return;
 			}
-		);
-	}
 
+			canvasNode.dataset.parolaInitialized = "1";
+
+			initChart(
+				canvasNode,
+				parolaInstanceCounter++
+			);
+		});
+	}
 
 	function initChart(canvasNode, instanceIndex) {
 		const canvas = d3.select(canvasNode);
@@ -148,6 +126,16 @@
 			canvas.attr("data-axis-labels") ||
 			canvas.attr("axis-labels"),
 			true
+		);
+
+		const defaultShowPercentage = parseBoolAttr(
+			canvas.attr("data-show-percentage") ||
+			canvas.attr("show-percentage") ||
+			canvas.attr("data-frequency-table-percentage") ||
+			canvas.attr("frequency-table-percentage") ||
+			canvas.attr("data-percentage") ||
+			canvas.attr("percentage"),
+			false
 		);
 
 		const activeFont = "Inter";
@@ -426,6 +414,13 @@
 			defaultShowAxisLabels
 		);
 
+		const showPercentageCheckbox = createCheckboxControl(
+			displayOptionsWrapper,
+			"Show Percentage",
+			`show-percentage-${uid}`,
+			defaultShowPercentage
+		);
+
 		const stackedOptionsWrapper = controls
 			.append("div")
 			.attr("id", `stacked-options-wrapper-${uid}`)
@@ -485,7 +480,7 @@
 		// =========================================================
 
 		const margin = {
-			top: 65,
+			top: 20,
 			right: 30,
 			bottom: 28,
 			left: 100
@@ -887,7 +882,7 @@
 					.style("white-space", "normal")
 					.style("width", "100%");
 			} else {
-				headerTitle.style("display", "none");
+				headerTitle.style("display", "none").text("");
 			}
 
 			if (showSubtitle) {
@@ -905,21 +900,20 @@
 					.style("word-wrap", "break-word")
 					.style("overflow-wrap", "break-word")
 					.style("white-space", "normal")
-					.style("width", "100%");
-
-				if (activeType === "heatmap" || activeType === "frequency-table") {
-					headerSubtitle.style(
-						"margin-bottom",
-						`${Math.max(6, Math.round(12 * currentFontScale))}px`
-					);
-				} else {
-					headerSubtitle.style(
-						"margin-bottom",
-						"0px"
-					);
-				}
+					.style("width", "100%")
+					.style(
+						"margin-top",
+						showTitle
+							? `${Math.max(2, Math.round(4 * currentFontScale))}px`
+							: "0px"
+					)
+					.style("margin-bottom", "0px");
 			} else {
-				headerSubtitle.style("display", "none");
+				headerSubtitle
+					.style("display", "none")
+					.text("")
+					.style("margin-top", "0px")
+					.style("margin-bottom", "0px");
 			}
 
 			const isMultiSeriesLegendType =
@@ -931,27 +925,30 @@
 			const hasAnyTitle = showTitle || showSubtitle;
 
 			if (!isMultiSeriesLegendType) {
-				headerLegend.style(
-					"display",
-					"none"
-				);
+				headerLegend
+					.style("display", "none")
+					.style("margin-top", "0px")
+					.style("margin-bottom", "0px");
 
 				if (!hasAnyTitle) {
 					headerRow.style("display", "none");
 					headerRow.style("margin-bottom", "0px");
-				} else if (activeType === "heatmap" || activeType === "frequency-table") {
-					headerRow.style("display", "flex");
-					headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
 				} else {
 					headerRow.style("display", "flex");
-					const offset = (!showTitle || !showSubtitle) ? -38 : -64;
-					headerRow.style("margin-bottom", `${Math.round(offset * currentFontScale)}px`);
+					headerRow.style(
+						"margin-bottom",
+						`${Math.max(6, Math.round(14 * currentFontScale))}px`
+					);
 				}
 
 				return;
 			}
 
 			headerRow.style("display", "flex");
+			headerRow.style(
+				"margin-bottom",
+				`${Math.max(8, Math.round(14 * currentFontScale))}px`
+			);
 
 			headerLegend
 				.selectAll("*")
@@ -987,28 +984,12 @@
 				return fallbackColorScale(key);
 			};
 
-			const marginTop = hasAnyTitle ? Math.round(32 * currentFontScale) : 0;
-			headerLegend.style("margin-top", `${marginTop}px`);
-
-			if (
-				activeType === "multi-line" ||
-				activeType === "stacked-area"
-			) {
-				const legendMarginBottom = Math.round(48 * currentFontScale);
-				headerLegend.style("margin-bottom", `${legendMarginBottom}px`);
-				headerRow.style("margin-bottom", "0px");
-			} else if (activeType === "heatmap") {
-				headerLegend.style("margin-bottom", "0px");
-				headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
-			} else {
-				headerLegend.style("margin-bottom", "0px");
-				if (!hasAnyTitle) {
-					headerRow.style("margin-bottom", `${Math.round(12 * currentFontScale)}px`);
-				} else {
-					const offset = (!showTitle || !showSubtitle) ? -38 : -64;
-					headerRow.style("margin-bottom", `${Math.round(offset * currentFontScale)}px`);
-				}
-			}
+			const marginTop = hasAnyTitle
+				? Math.max(4, Math.round(10 * currentFontScale))
+				: 0;
+			headerLegend
+				.style("margin-top", `${marginTop}px`)
+				.style("margin-bottom", "0px");
 
 			const legendGap = Math.max(8, Math.round(20 * currentFontScale));
 			const dotSize = Math.max(6, Math.round(12 * currentFontScale));
@@ -1382,6 +1363,9 @@
 
 			const showAxisLabels =
 				showAxisLabelsCheckbox.property("checked");
+
+			const showPercentage =
+				showPercentageCheckbox.property("checked");
 
 			renderHTMLHeader(
 				mainTitleValue,
@@ -2732,20 +2716,16 @@
 											this
 										);
 
-								d3
-									.select(
-										svg
-											.selectAll(
-												".bar-label"
-											)
-											.nodes()[
-										idx
-										]
-									)
-									.attr(
-										"opacity",
-										1
-									);
+								if (showDataLabels) {
+									const labelNodes = svg
+										.selectAll(
+											".bar-label"
+										)
+										.nodes();
+									if (labelNodes[idx]) {
+										d3.select(labelNodes[idx]).attr("opacity", 1);
+									}
+								}
 
 								tooltip.style(
 									"visibility",
@@ -2798,14 +2778,16 @@
 										1
 									);
 
-								svg
-									.selectAll(
-										".bar-label"
-									)
-									.attr(
-										"opacity",
-										1
-									);
+								if (showDataLabels) {
+									svg
+										.selectAll(
+											".bar-label"
+										)
+										.attr(
+											"opacity",
+											1
+										);
+								}
 
 								tooltip.style(
 									"visibility",
@@ -2814,76 +2796,78 @@
 							}
 						);
 
-				svg
-					.selectAll(
-						".bar-label"
-					)
-					.data(
-						data
-					)
-					.enter()
-					.append(
-						"text"
-					)
-					.attr(
-						"class",
-						"bar-label"
-					)
-					.attr(
-						"x",
-						function (row) {
-							return (
-								xScale(
-									row[
-									categoryKey
-									]
-								) +
-								xScale.bandwidth() /
-								2
-							);
-						}
-					)
-					.attr(
-						"y",
-						function (row) {
-							return (
-								yScale(
+				if (showDataLabels) {
+					svg
+						.selectAll(
+							".bar-label"
+						)
+						.data(
+							data
+						)
+						.enter()
+						.append(
+							"text"
+						)
+						.attr(
+							"class",
+							"bar-label"
+						)
+						.attr(
+							"x",
+							function (row) {
+								return (
+									xScale(
+										row[
+										categoryKey
+										]
+									) +
+									xScale.bandwidth() /
+									2
+								);
+							}
+						)
+						.attr(
+							"y",
+							function (row) {
+								return (
+									yScale(
+										row[
+										valueKeys[0]
+										] || 0
+									) - 5
+								);
+							}
+						)
+						.attr(
+							"text-anchor",
+							"middle"
+						)
+						.attr(
+							"fill",
+							"#000000"
+						)
+						.style(
+							"font-family",
+							activeFont
+						)
+						.style(
+							"font-weight",
+							"bold"
+						)
+						.style(
+							"font-size",
+							tickSize
+						)
+						.text(
+							function (row) {
+								return (
 									row[
 									valueKeys[0]
 									] || 0
-								) - 5
-							);
-						}
-					)
-					.attr(
-						"text-anchor",
-						"middle"
-					)
-					.attr(
-						"fill",
-						"#000000"
-					)
-					.style(
-						"font-family",
-						activeFont
-					)
-					.style(
-						"font-weight",
-						"bold"
-					)
-					.style(
-						"font-size",
-						tickSize
-					)
-					.text(
-						function (row) {
-							return (
-								row[
-								valueKeys[0]
-								] || 0
-							);
-						}
-					);
+								);
+							}
+						);
+				}
 			}
 
 			// =====================================================
@@ -3210,14 +3194,16 @@
 										1
 									);
 
-								svg
-									.selectAll(
-										".hbar-label"
-									)
-									.attr(
-										"opacity",
-										1
-									);
+								if (showDataLabels) {
+									svg
+										.selectAll(
+											".hbar-label"
+										)
+										.attr(
+											"opacity",
+											1
+										);
+								}
 
 								tooltip.style(
 									"visibility",
@@ -3226,101 +3212,103 @@
 							}
 						);
 
-				svg
-					.selectAll(
-						".hbar-label"
-					)
-					.data(
-						data
-					)
-					.enter()
-					.append(
-						"text"
-					)
-					.attr(
-						"class",
-						"hbar-label"
-					)
-					.attr(
-						"x",
-						function (row) {
-							return (
-								xScale(
+				if (showDataLabels) {
+					svg
+						.selectAll(
+							".hbar-label"
+						)
+						.data(
+							data
+						)
+						.enter()
+						.append(
+							"text"
+						)
+						.attr(
+							"class",
+							"hbar-label"
+						)
+						.attr(
+							"x",
+							function (row) {
+								return (
+									xScale(
+										row[
+										valueKeys[0]
+										] || 0
+									) + 6
+								);
+							}
+						)
+						.attr(
+							"y",
+							function (row) {
+								return (
+									yScale(
+										row[
+										categoryKey
+										]
+									) +
+									yScale.bandwidth() /
+									2
+								);
+							}
+						)
+						.attr(
+							"dy",
+							"0.35em"
+						)
+						.attr(
+							"text-anchor",
+							"start"
+						)
+						.attr(
+							"fill",
+							"#000000"
+						)
+						.style(
+							"font-family",
+							activeFont
+						)
+						.style(
+							"font-weight",
+							"bold"
+						)
+						.style(
+							"font-size",
+							tickSize
+						)
+						.text(
+							function (row) {
+								return (
 									row[
 									valueKeys[0]
 									] || 0
-								) + 6
-							);
-						}
-					)
-					.attr(
-						"y",
-						function (row) {
-							return (
-								yScale(
-									row[
-									categoryKey
-									]
-								) +
-								yScale.bandwidth() /
-								2
-							);
-						}
-					)
-					.attr(
-						"dy",
-						"0.35em"
-					)
-					.attr(
-						"text-anchor",
-						"start"
-					)
-					.attr(
-						"fill",
-						"#000000"
-					)
-					.style(
-						"font-family",
-						activeFont
-					)
-					.style(
-						"font-weight",
-						"bold"
-					)
-					.style(
-						"font-size",
-						tickSize
-					)
-					.text(
-						function (row) {
-							return (
-								row[
-								valueKeys[0]
-								] || 0
-							);
-						}
-					)
-					.each(
-						function () {
-							const bbox =
-								this.getBBox();
-
-							if (
-								bbox.x +
-								bbox.width >
-								dynamicActiveWidth
-							) {
-								d3
-									.select(
-										this
-									)
-									.style(
-										"display",
-										"none"
-									);
+								);
 							}
-						}
-					);
+						)
+						.each(
+							function () {
+								const bbox =
+									this.getBBox();
+
+								if (
+									bbox.x +
+									bbox.width >
+									dynamicActiveWidth
+								) {
+									d3
+										.select(
+											this
+										)
+										.style(
+											"display",
+											"none"
+										);
+								}
+							}
+						);
+				}
 			}
 
 			// =====================================================
@@ -6297,9 +6285,6 @@
 					"none"
 				);
 
-				// Reset headerRow margin so the heatmap content starts below the header
-				headerRow.style("margin-bottom", "12px");
-
 				const heatmapWrapper =
 					contentRow
 						.append(
@@ -7381,12 +7366,6 @@
 					"none"
 				);
 
-				// Reset headerRow margin so frequency table starts cleanly below the header
-				headerRow.style(
-					"margin-bottom",
-					`${Math.round(12 * fontScale)}px`
-				);
-
 				const tableWrapper =
 					contentRow
 						.append(
@@ -7424,6 +7403,7 @@
 					(valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
 					keys[0];
 
+				let totalVal = 0;
 				let maxVal = 0;
 				data.forEach(
 					function (row) {
@@ -7431,6 +7411,7 @@
 							parseFloat(
 								row[secondColKey]
 							) || 0;
+						totalVal += v;
 						if (v > maxVal) {
 							maxVal = v;
 						}
@@ -7641,11 +7622,21 @@
 								"width 0.3s ease"
 							);
 
-						// Column 3: Second column data from CSV
-						const displayCount =
-							typeof rawVal === "number"
-								? rawVal.toLocaleString()
-								: String(rawVal);
+						// Column 3: Second column data from CSV (number or percentage)
+						let displayCount;
+						if (showPercentage) {
+							if (typeof rawVal === "string" && rawVal.trim().endsWith("%")) {
+								displayCount = rawVal;
+							} else {
+								const pct = totalVal > 0 ? (numericVal / totalVal) * 100 : 0;
+								displayCount = `${parseFloat(pct.toFixed(1))}%`;
+							}
+						} else {
+							displayCount =
+								typeof rawVal === "number"
+									? rawVal.toLocaleString()
+									: String(rawVal);
+						}
 
 						tr.append(
 							"td"
@@ -7972,6 +7963,20 @@
 		);
 
 		showAxisLabelsCheckbox.on(
+			"change",
+			function () {
+				if (
+					currentData.length >
+					0
+				) {
+					renderChart(
+						currentData
+					);
+				}
+			}
+		);
+
+		showPercentageCheckbox.on(
 			"change",
 			function () {
 				if (
