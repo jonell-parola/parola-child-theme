@@ -424,6 +424,14 @@ function custom_d3_register_block() {
 					'type' => 'boolean',
 					'default' => true,
 				),
+				'showPercentage' => array(
+					'type' => 'boolean',
+					'default' => false,
+				),
+				'thickShortColumns' => array(
+					'type' => 'boolean',
+					'default' => false,
+				),
 			),
 			'supports'        => array(
 				'multiple' => true,
@@ -492,6 +500,8 @@ function custom_d3_render_block( $attributes ) {
 	$show_axis_labels  = ! array_key_exists( 'showAxisLabels', $attributes ) || (bool) $attributes['showAxisLabels'];
 	$show_data_labels  = array_key_exists( 'showDataLabels', $attributes ) && (bool) $attributes['showDataLabels'];
 	$show_stack_totals = ! array_key_exists( 'showStackTotals', $attributes ) || (bool) $attributes['showStackTotals'];
+	$show_percentage   = array_key_exists( 'showPercentage', $attributes ) && (bool) $attributes['showPercentage'];
+	$thick_short_columns = array_key_exists( 'thickShortColumns', $attributes ) && (bool) $attributes['thickShortColumns'];
 
 	$bool_attr = static function ( $value ) { return $value ? 'true' : 'false'; };
 
@@ -517,7 +527,7 @@ function custom_d3_render_block( $attributes ) {
 	}
 
 	return sprintf(
-		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" data-chart-type="%5$s" data-logo-style="%6$s" data-show-logo="%7$s" data-show-title="%8$s" data-show-subtitle="%9$s" data-show-axis-labels="%10$s" data-show-data-labels="%11$s" data-show-stack-totals="%12$s"></div></div>',
+		'<div %1$s><div id="%2$s" class="d3-test-canvas" data-csv-url="%3$s" data-csv-filename="%4$s" data-chart-type="%5$s" data-logo-style="%6$s" data-show-logo="%7$s" data-show-title="%8$s" data-show-subtitle="%9$s" data-show-axis-labels="%10$s" data-show-data-labels="%11$s" data-show-stack-totals="%12$s" data-show-percentage="%13$s" data-thick-columns="%14$s"></div></div>',
 		$wrapper_attributes,
 		esc_attr( $canvas_id ),
 		esc_url( $csv_url ),
@@ -529,7 +539,9 @@ function custom_d3_render_block( $attributes ) {
 		esc_attr( $bool_attr( $show_subtitle ) ),
 		esc_attr( $bool_attr( $show_axis_labels ) ),
 		esc_attr( $bool_attr( $show_data_labels ) ),
-		esc_attr( $bool_attr( $show_stack_totals ) )
+		esc_attr( $bool_attr( $show_stack_totals ) ),
+		esc_attr( $bool_attr( $show_percentage ) ),
+		esc_attr( $bool_attr( $thick_short_columns ) )
 	);
 }
 
@@ -563,7 +575,7 @@ function custom_d3_enqueue_editor_script() {
 		'parola-charts-editor',
 		get_stylesheet_directory_uri() . '/js/parola-charts.js',
 		array( 'papaparse-cdn-editor', 'd3-cdn-editor' ),
-		'1.0.83',
+		'1.0.85',
 		true
 	);
 
@@ -641,7 +653,9 @@ function custom_d3_get_editor_js() {
 			showSubtitle: { type: 'boolean', default: true },
 			showAxisLabels: { type: 'boolean', default: true },
 			showDataLabels: { type: 'boolean', default: false },
-			showStackTotals: { type: 'boolean', default: true }
+			showStackTotals: { type: 'boolean', default: true },
+			showPercentage: { type: 'boolean', default: false },
+			thickShortColumns: { type: 'boolean', default: false }
 		},
 
 		edit: function ( props ) {
@@ -686,7 +700,9 @@ function custom_d3_get_editor_js() {
 				attributes.showSubtitle,
 				attributes.showAxisLabels,
 				attributes.showDataLabels,
-				attributes.showStackTotals
+				attributes.showStackTotals,
+				attributes.showPercentage,
+				attributes.thickShortColumns
 			] );
 
 			function onSelectCsv( media ) {
@@ -810,7 +826,8 @@ function custom_d3_get_editor_js() {
 				{ key: 'showLogo', label: __( 'Show Logo', 'custom-d3' ), defaultValue: true },
 				{ key: 'showTitle', label: __( 'Show Title', 'custom-d3' ), defaultValue: true },
 				{ key: 'showSubtitle', label: __( 'Show Subtitle', 'custom-d3' ), defaultValue: true },
-				{ key: 'showAxisLabels', label: __( 'Show Axis Labels', 'custom-d3' ), defaultValue: true }
+				{ key: 'showAxisLabels', label: __( 'Show Axis Labels', 'custom-d3' ), defaultValue: true },
+				{ key: 'showPercentage', label: __( 'Show Percentage', 'custom-d3' ), defaultValue: false }
 			].forEach( function ( option ) {
 				children.push( el( CheckboxControl, {
 					key: option.key,
@@ -834,6 +851,16 @@ function custom_d3_get_editor_js() {
 				onChange: function ( value ) { setAttributes( { showStackTotals: !! value } ); }
 			} ) );
 
+			if ( ( attributes.chartType || 'bar' ) === 'bar' ) {
+				children.push( el( 'div', { key: 'column-options-heading', style: { fontWeight: '600', marginTop: '18px', marginBottom: '8px' } }, __( 'Column Chart Options', 'custom-d3' ) ) );
+				children.push( el( CheckboxControl, {
+					key: 'thick-short-columns',
+					label: __( 'Thick & Short Columns', 'custom-d3' ),
+					checked: !! attributes.thickShortColumns,
+					onChange: function ( value ) { setAttributes( { thickShortColumns: !! value } ); }
+				} ) );
+			}
+
 			if ( hasCsv ) {
 				children.push(
 					el(
@@ -849,7 +876,9 @@ function custom_d3_get_editor_js() {
 								String( attributes.showSubtitle ) + '-' +
 								String( attributes.showAxisLabels ) + '-' +
 								String( attributes.showDataLabels ) + '-' +
-								String( attributes.showStackTotals ),
+								String( attributes.showStackTotals ) + '-' +
+								String( attributes.showPercentage ) + '-' +
+								String( attributes.thickShortColumns ),
 							style: {
 								marginTop: '25px',
 								paddingTop: '20px',
@@ -880,7 +909,9 @@ function custom_d3_get_editor_js() {
 									String( attributes.showSubtitle ) + '-' +
 									String( attributes.showAxisLabels ) + '-' +
 									String( attributes.showDataLabels ) + '-' +
-									String( attributes.showStackTotals ),
+									String( attributes.showStackTotals ) + '-' +
+								String( attributes.showPercentage ) + '-' +
+								String( attributes.thickShortColumns ),
 								className: 'd3-test-canvas d3-gutenberg-preview',
 								'data-parola-block-id': clientId,
 								'data-csv-url': attributes.csvUrl,
@@ -893,6 +924,8 @@ function custom_d3_get_editor_js() {
 								'data-show-axis-labels': attributes.showAxisLabels !== false ? 'true' : 'false',
 								'data-show-data-labels': attributes.showDataLabels ? 'true' : 'false',
 								'data-show-stack-totals': attributes.showStackTotals !== false ? 'true' : 'false',
+								'data-show-percentage': attributes.showPercentage ? 'true' : 'false',
+								'data-thick-columns': attributes.thickShortColumns ? 'true' : 'false',
 								style: {
 									width: '100%',
 									minHeight: '300px',
@@ -946,7 +979,9 @@ function custom_d3_builder_setting_sync_js() {
 		'data-show-subtitle': 'show-subtitle-',
 		'data-show-axis-labels': 'show-axis-labels-',
 		'data-show-data-labels': 'show-data-labels-',
-		'data-show-stack-totals': 'show-stack-totals-'
+		'data-show-stack-totals': 'show-stack-totals-',
+		'data-show-percentage': 'show-percentage-',
+		'data-thick-columns': 'thick-short-columns-'
 	};
 
 	function parseBoolean(value, fallback) {
@@ -999,7 +1034,9 @@ function custom_d3_builder_setting_sync_js() {
 			'data-show-subtitle': true,
 			'data-show-axis-labels': true,
 			'data-show-data-labels': false,
-			'data-show-stack-totals': true
+			'data-show-stack-totals': true,
+			'data-show-percentage': false,
+			'data-thick-columns': false
 		};
 
 		var nextValue = parseBoolean(
