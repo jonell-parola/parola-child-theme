@@ -66,6 +66,8 @@ class Parola_Element_D3_Chart extends \Bricks\Element {
 				'stacked-area'           => esc_html__( 'Stacked area chart', 'bricks' ),
 				'heatmap'                => esc_html__( 'Heatmap', 'bricks' ),
 				'frequency-table'        => esc_html__( 'Frequency Table', 'bricks' ),
+				'percentage-table'       => esc_html__( 'Percentage Table', 'bricks' ),
+				'firm-ranking-table'     => esc_html__( 'Firm Ranking Table', 'bricks' ),
 			),
 			'default'     => 'bar',
 			'clearable'   => false,
@@ -330,6 +332,8 @@ class Parola_Element_D3_Chart extends \Bricks\Element {
 			'stacked-area',
 			'heatmap',
 			'frequency-table',
+			'percentage-table',
+			'firm-ranking-table',
 		);
 
 		$chart_type = isset( $settings['chartType'] )
