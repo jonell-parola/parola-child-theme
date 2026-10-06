@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.85 - New percentage table, thicker and shorter columns, and new firm ranking table chart type.
+ * 1.0.86 - Space removed above short thick columns, firm ranking table dropdown with button filters removed, and wp-content/chart directory search fallback.
  */
 (function () {
 
@@ -78,6 +78,8 @@
         const defaultCsv =
             canvas.attr("data-csv-url") ||
             canvas.attr("data-source-file") ||
+            canvas.attr("data-csv-filename") ||
+            canvas.attr("data-csv") ||
             "";
 
         const defaultChartType =
@@ -1183,18 +1185,20 @@
         function extractFirmRankingData(rawRows, fallbackData) {
             if (!rawRows || rawRows.length < 2) {
                 return {
-                    entityName: "Entity",
-                    records: (fallbackData || []).map(function (row) {
-                        const keys = Object.keys(row);
-                        return {
-                            industry: row.Industry || row.industry || row[keys[0]] || "",
-                            rank: row.Rank || row.rank || row["Volume Rank"] || row[keys[1]] || "",
-                            position: row["Position among firms"] || row["Position among Firms"] || row.Position || row[keys[2]] || "",
-                            patents: row.Patents || row.patents || row["Granted patents"] || row[keys[3]] || "",
-                            grantRate: row["Grant rate"] || row["Efficiency Rate"] || row.grantRate || row[keys[4]] || "",
-                            yoy: row.YoY || row["Efficiency Rank"] || row.yoy || row[keys[5]] || ""
-                        };
-                    })
+                    entities: [{
+                        entityName: "Entity",
+                        records: (fallbackData || []).map(function (row) {
+                            const keys = Object.keys(row);
+                            return {
+                                industry: row.Industry || row.industry || row[keys[0]] || "",
+                                rank: row.Rank || row.rank || row["Volume Rank"] || row[keys[1]] || "",
+                                position: row["Position among firms"] || row["Position among Firms"] || row.Position || row[keys[2]] || "",
+                                patents: row.Patents || row.patents || row["Granted patents"] || row[keys[3]] || "",
+                                grantRate: row["Grant rate"] || row["Efficiency Rate"] || row.grantRate || row[keys[4]] || "",
+                                yoy: row.YoY || row["Efficiency Rank"] || row.yoy || row[keys[5]] || ""
+                            };
+                        })
+                    }]
                 };
             }
 
@@ -1216,51 +1220,69 @@
 
             const industryRow = headerRowIdx > 0 ? rawRows[headerRowIdx - 1] : [];
             const headerRow = rawRows[headerRowIdx] || [];
-            const dataRow = rawRows[headerRowIdx + 1] || [];
-            const entityName = (dataRow[0] && String(dataRow[0]).trim()) || "Entity";
 
-            const industries = [];
-            for (let c = 0; c < Math.max(industryRow.length, headerRow.length); c++) {
-                const indName = industryRow[c] ? String(industryRow[c]).trim() : '';
-                if (indName !== '') {
-                    let rankVal = '';
-                    let posVal = '';
-                    let patVal = '';
-                    let grantVal = '';
-                    let yoyVal = '';
+            const entities = [];
+            for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+                const dataRow = rawRows[r];
+                if (!dataRow || dataRow.length === 0) continue;
 
-                    for (let sub = 0; sub < 5; sub++) {
-                        const colIdx = c + sub;
-                        const subHdr = headerRow[colIdx] ? String(headerRow[colIdx]).trim().toLowerCase().replace(/\s+/g, ' ') : '';
-                        const val = dataRow[colIdx] !== undefined ? String(dataRow[colIdx]).trim() : '';
+                const entityName = (dataRow[0] && String(dataRow[0]).trim()) || "";
+                if (!entityName) continue;
 
-                        if (subHdr.includes('efficiency rate') || subHdr.includes('grant rate')) {
-                            grantVal = val;
-                        } else if (subHdr.includes('efficiency rank') || subHdr.includes('yoy')) {
-                            yoyVal = val;
-                        } else if (subHdr.includes('position')) {
-                            posVal = val;
-                        } else if (subHdr.includes('granted patents') || subHdr.includes('patents')) {
-                            patVal = val;
-                        } else if (subHdr.includes('volume rank') || subHdr.includes('rank')) {
-                            rankVal = val;
+                const industries = [];
+                for (let c = 0; c < Math.max(industryRow.length, headerRow.length); c++) {
+                    const indName = industryRow[c] ? String(industryRow[c]).trim() : '';
+                    if (indName !== '') {
+                        let rankVal = '';
+                        let posVal = '';
+                        let patVal = '';
+                        let grantVal = '';
+                        let yoyVal = '';
+
+                        for (let sub = 0; sub < 5; sub++) {
+                            const colIdx = c + sub;
+                            const subHdr = headerRow[colIdx] ? String(headerRow[colIdx]).trim().toLowerCase().replace(/\s+/g, ' ') : '';
+                            const val = dataRow[colIdx] !== undefined ? String(dataRow[colIdx]).trim() : '';
+
+                            if (subHdr.includes('efficiency rate') || subHdr.includes('grant rate')) {
+                                grantVal = val;
+                            } else if (subHdr.includes('efficiency rank') || subHdr.includes('yoy')) {
+                                yoyVal = val;
+                            } else if (subHdr.includes('position')) {
+                                posVal = val;
+                            } else if (subHdr.includes('granted patents') || subHdr.includes('patents')) {
+                                patVal = val;
+                            } else if (subHdr.includes('volume rank') || subHdr.includes('rank')) {
+                                rankVal = val;
+                            }
                         }
-                    }
 
-                    industries.push({
-                        industry: indName,
-                        rank: rankVal,
-                        position: posVal,
-                        patents: patVal,
-                        grantRate: grantVal,
-                        yoy: yoyVal
-                    });
+                        industries.push({
+                            industry: indName,
+                            rank: rankVal,
+                            position: posVal,
+                            patents: patVal,
+                            grantRate: grantVal,
+                            yoy: yoyVal
+                        });
+                    }
                 }
+
+                entities.push({
+                    entityName: entityName,
+                    records: industries
+                });
+            }
+
+            if (entities.length === 0) {
+                entities.push({
+                    entityName: "Entity",
+                    records: []
+                });
             }
 
             return {
-                entityName: entityName,
-                records: industries
+                entities: entities
             };
         }
 
@@ -1293,6 +1315,9 @@
             const activeType =
                 typePicker.property("value");
 
+            const isThickShort =
+                thickShortColumnsCheckbox.property("checked");
+
             const selectedLogo =
                 logoPicker.property("value") ||
                 defaultLogoStyle;
@@ -1311,6 +1336,13 @@
                     320,
                     containerWidth * 0.65
                 );
+
+            if (activeType === "bar" && isThickShort) {
+                chartHeight = Math.max(
+                    180,
+                    containerWidth * 0.35
+                );
+            }
 
             const activeWidth =
                 chartWidth -
@@ -1492,9 +1524,6 @@
 
             const showPercentage =
                 showPercentageCheckbox.property("checked");
-
-            const isThickShort =
-                thickShortColumnsCheckbox.property("checked");
 
             if (activeType === "bar") {
                 columnOptionsWrapper.style("display", "flex");
@@ -2599,7 +2628,7 @@
                 );
 
                 const columnPadding = isThickShort ? 0.12 : 0.3;
-                const columnDomainMultiplier = isThickShort ? 1.85 : 1.1;
+                const columnDomainMultiplier = 1.1;
 
                 const xScale =
                     d3
@@ -8139,68 +8168,42 @@
                     .style("box-sizing", "border-box");
 
                 const rankingData = extractFirmRankingData(currentRawRows, data);
-                const entityName = rankingData.entityName || "Entity";
-                const records = rankingData.records || [];
+                const entities = rankingData.entities || [];
 
                 // -------------------------------------------------
-                // Row 1: Left buttons + Right Entity Name
+                // Row 1: Right-aligned Firm Selection Dropdown
                 // -------------------------------------------------
                 const topRow = tableContainer
                     .append("div")
                     .style("display", "flex")
-                    .style("justify-content", "space-between")
+                    .style("justify-content", "flex-end")
                     .style("align-items", "center")
                     .style("flex-wrap", "wrap")
-                    .style("gap", "12px")
+                    .style("gap", "10px")
                     .style("margin-bottom", "16px")
                     .style("width", "100%");
 
-                const buttonGroup = topRow
-                    .append("div")
-                    .style("display", "flex")
-                    .style("align-items", "center")
-                    .style("gap", "8px")
-                    .style("flex-wrap", "wrap");
-
-                buttonGroup
-                    .append("button")
-                    .attr("type", "button")
-                    .text("Rank by filing volume")
-                    .style("background-color", "#0f172a")
-                    .style("color", "#ffffff")
-                    .style("border", "1px solid #0f172a")
-                    .style("border-radius", "6px")
-                    .style("padding", "7px 15px")
-                    .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
-                    .style("font-weight", "500")
-                    .style("font-family", activeFont)
-                    .style("cursor", "pointer")
-                    .style("outline", "none")
-                    .style("transition", "all 0.15s ease");
-
-                buttonGroup
-                    .append("button")
-                    .attr("type", "button")
-                    .text("Rank by grant date")
+                const firmSelect = topRow
+                    .append("select")
+                    .attr("class", `firm-ranking-select-${uid}`)
+                    .style("padding", "7px 14px")
+                    .style("font-size", `${Math.max(12, Math.round(14 * fontScale))}px`)
+                    .style("font-weight", "600")
+                    .style("color", "#1e293b")
                     .style("background-color", "#ffffff")
-                    .style("color", "#475569")
                     .style("border", "1px solid #cbd5e1")
                     .style("border-radius", "6px")
-                    .style("padding", "7px 15px")
-                    .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
-                    .style("font-weight", "500")
-                    .style("font-family", activeFont)
                     .style("cursor", "pointer")
                     .style("outline", "none")
-                    .style("transition", "all 0.15s ease");
+                    .style("box-shadow", "0 1px 2px rgba(0,0,0,0.05)")
+                    .style("font-family", activeFont);
 
-                topRow
-                    .append("div")
-                    .style("font-weight", "700")
-                    .style("font-size", `${Math.max(13, Math.round(16 * fontScale))}px`)
-                    .style("color", "#1e293b")
-                    .style("letter-spacing", "0.02em")
-                    .text(entityName);
+                entities.forEach(function (ent, idx) {
+                    firmSelect
+                        .append("option")
+                        .attr("value", idx)
+                        .text(ent.entityName);
+                });
 
                 // -------------------------------------------------
                 // Row 2: Table (6 columns)
@@ -8266,100 +8269,114 @@
                     }
                 }
 
-                records.forEach(function (rec) {
-                    const tr = tbody.append("tr")
-                        .style("border-bottom", "1px solid #f1f5f9")
-                        .style("transition", "background-color 0.15s ease");
+                function renderFirmTableRows(entityIdx) {
+                    tbody.selectAll("*").remove();
 
-                    // 1. Industry
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "left")
-                        .style("font-weight", "500")
-                        .style("color", "#1e293b")
-                        .style("white-space", "nowrap")
-                        .text(rec.industry || "");
+                    const currentEntity = entities[entityIdx] || entities[0] || { records: [] };
+                    const records = currentEntity.records || [];
 
-                    // 2. Rank
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "center")
-                        .style("font-weight", "600")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(rec.rank !== undefined ? rec.rank : "");
+                    records.forEach(function (rec) {
+                        const tr = tbody.append("tr")
+                            .style("border-bottom", "1px solid #f1f5f9")
+                            .style("transition", "background-color 0.15s ease");
 
-                    // 3. Position among firms (colored dot + text)
-                    const posTd = tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "left")
-                        .style("white-space", "nowrap");
+                        // 1. Industry
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "left")
+                            .style("font-weight", "500")
+                            .style("color", "#1e293b")
+                            .style("white-space", "nowrap")
+                            .text(rec.industry || "");
 
-                    const badgeInfo = getPositionBadgeInfo(rec.position);
-                    const posWrapper = posTd.append("span")
-                        .style("display", "inline-flex")
-                        .style("align-items", "center")
-                        .style("gap", "7px")
-                        .style("font-weight", "500")
-                        .style("color", "#334155");
+                        // 2. Rank
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "center")
+                            .style("font-weight", "600")
+                            .style("color", "#334155")
+                            .style("white-space", "nowrap")
+                            .text(rec.rank !== undefined ? rec.rank : "");
 
-                    posWrapper.append("span")
-                        .style("width", "8px")
-                        .style("height", "8px")
-                        .style("border-radius", "50%")
-                        .style("background-color", badgeInfo.color)
-                        .style("display", "inline-block")
-                        .style("flex-shrink", "0");
+                        // 3. Position among firms (colored dot + text)
+                        const posTd = tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "left")
+                            .style("white-space", "nowrap");
 
-                    posWrapper.append("span")
-                        .text(badgeInfo.label);
+                        const badgeInfo = getPositionBadgeInfo(rec.position);
+                        const posWrapper = posTd.append("span")
+                            .style("display", "inline-flex")
+                            .style("align-items", "center")
+                            .style("gap", "7px")
+                            .style("font-weight", "500")
+                            .style("color", "#334155");
 
-                    // 4. Patents
-                    const formattedPatents = typeof rec.patents === "number"
-                        ? rec.patents.toLocaleString()
-                        : (rec.patents || "");
+                        posWrapper.append("span")
+                            .style("width", "8px")
+                            .style("height", "8px")
+                            .style("border-radius", "50%")
+                            .style("background-color", badgeInfo.color)
+                            .style("display", "inline-block")
+                            .style("flex-shrink", "0");
 
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "right")
-                        .style("font-weight", "500")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(formattedPatents);
+                        posWrapper.append("span")
+                            .text(badgeInfo.label);
 
-                    // 5. Grant rate
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "right")
-                        .style("font-weight", "500")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(rec.grantRate || "");
+                        // 4. Patents
+                        const formattedPatents = typeof rec.patents === "number"
+                            ? rec.patents.toLocaleString()
+                            : (rec.patents || "");
 
-                    // 6. YoY
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "center")
-                        .style("font-weight", "600")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(rec.yoy !== undefined ? rec.yoy : "");
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "right")
+                            .style("font-weight", "500")
+                            .style("color", "#334155")
+                            .style("white-space", "nowrap")
+                            .text(formattedPatents);
 
-                    // Tooltip and hover
-                    const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Rank:</strong> ${rec.rank}<br><strong>Position:</strong> ${badgeInfo.label}<br><strong>Patents:</strong> ${formattedPatents}<br><strong>Grant rate:</strong> ${rec.grantRate}<br><strong>YoY:</strong> ${rec.yoy}`;
+                        // 5. Grant rate
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "right")
+                            .style("font-weight", "500")
+                            .style("color", "#334155")
+                            .style("white-space", "nowrap")
+                            .text(rec.grantRate || "");
 
-                    tr.on("mouseover", function () {
-                        d3.select(this).style("background-color", "#f8fafc");
-                        tooltip.html(formatTooltipContent(tooltipContent)).style("visibility", "visible");
-                    })
-                        .on("mousemove", function (event) {
-                            tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
+                        // 6. YoY
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "center")
+                            .style("font-weight", "600")
+                            .style("color", "#334155")
+                            .style("white-space", "nowrap")
+                            .text(rec.yoy !== undefined ? rec.yoy : "");
+
+                        // Tooltip and hover
+                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Rank:</strong> ${rec.rank}<br><strong>Position:</strong> ${badgeInfo.label}<br><strong>Patents:</strong> ${formattedPatents}<br><strong>Grant rate:</strong> ${rec.grantRate}<br><strong>YoY:</strong> ${rec.yoy}`;
+
+                        tr.on("mouseover", function () {
+                            d3.select(this).style("background-color", "#f8fafc");
+                            tooltip.html(formatTooltipContent(tooltipContent)).style("visibility", "visible");
                         })
-                        .on("mouseout", function () {
-                            d3.select(this).style("background-color", "transparent");
-                            tooltip.style("visibility", "hidden");
-                        });
+                            .on("mousemove", function (event) {
+                                tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
+                            })
+                            .on("mouseout", function () {
+                                d3.select(this).style("background-color", "transparent");
+                                tooltip.style("visibility", "hidden");
+                            });
+                    });
+                }
+
+                firmSelect.on("change", function () {
+                    const selIdx = parseInt(this.value, 10) || 0;
+                    renderFirmTableRows(selIdx);
                 });
+
+                renderFirmTableRows(0);
 
                 // -------------------------------------------------
                 // Row 3: Table Legend
@@ -9377,12 +9394,18 @@
         // BACKEND CSV FALLBACK
         // =========================================================
 
-        const backendCsvUrl =
+        const rawBackendCsvUrl =
             canvas.attr(
                 "data-csv-url"
             ) ||
             canvas.attr(
                 "data-source-file"
+            ) ||
+            canvas.attr(
+                "data-csv-filename"
+            ) ||
+            canvas.attr(
+                "data-csv"
             ) ||
             "";
 
@@ -9390,133 +9413,188 @@
             canvas.attr(
                 "data-csv-filename"
             ) ||
+            (rawBackendCsvUrl ? rawBackendCsvUrl.substring(rawBackendCsvUrl.lastIndexOf("/") + 1) : "chart.csv") ||
             "chart.csv";
 
         function loadBackendCsv() {
             if (
                 csvHasLoaded ||
-                !backendCsvUrl
+                !rawBackendCsvUrl
             ) {
                 return;
             }
 
-            fetch(
-                backendCsvUrl,
-                {
-                    credentials:
-                        "same-origin",
-                    cache:
-                        "no-store"
-                }
-            )
-                .then(
-                    function (
-                        response
-                    ) {
-                        if (
-                            !response.ok
-                        ) {
-                            throw new Error(
-                                `CSV request failed with status ${response.status}.`
-                            );
-                        }
+            const rawFilename = (
+                backendCsvFilename ||
+                rawBackendCsvUrl.substring(rawBackendCsvUrl.lastIndexOf("/") + 1)
+            ).trim();
 
-                        return response.blob();
+            const candidateUrls = [];
+
+            // 1. Direct URL as specified on the element
+            if (rawBackendCsvUrl) {
+                candidateUrls.push(rawBackendCsvUrl);
+            }
+
+            // 2. wp-content/chart/ directory candidates
+            if (rawFilename) {
+                candidateUrls.push(`/wp-content/chart/${rawFilename}`);
+                candidateUrls.push(`wp-content/chart/${rawFilename}`);
+            }
+
+            if (
+                rawBackendCsvUrl &&
+                !rawBackendCsvUrl.startsWith("http://") &&
+                !rawBackendCsvUrl.startsWith("https://")
+            ) {
+                const cleanPath = rawBackendCsvUrl.replace(/^\/+/, "");
+                if (!cleanPath.startsWith("wp-content/chart/")) {
+                    candidateUrls.push(`/wp-content/chart/${cleanPath}`);
+                    candidateUrls.push(`wp-content/chart/${cleanPath}`);
+                }
+            }
+
+            // Remove duplicate candidate URLs
+            const uniqueUrls = candidateUrls.filter(function (url, index, self) {
+                return url && self.indexOf(url) === index;
+            });
+
+            function tryFetchCandidate(urlIndex) {
+                if (urlIndex >= uniqueUrls.length) {
+                    console.error(
+                        `Parola chart ${uid}: Backend CSV could not be loaded from candidate URLs.`,
+                        uniqueUrls
+                    );
+
+                    if (!csvHasLoaded) {
+                        displayErrorState(
+                            "Tracking metrics update pending"
+                        );
+                    }
+                    return;
+                }
+
+                const currentUrl = uniqueUrls[urlIndex];
+
+                fetch(
+                    currentUrl,
+                    {
+                        credentials:
+                            "same-origin",
+                        cache:
+                            "no-store"
                     }
                 )
-                .then(
-                    function (
-                        blob
-                    ) {
-                        if (
-                            csvHasLoaded
+                    .then(
+                        function (
+                            response
                         ) {
-                            return;
+                            if (
+                                !response.ok
+                            ) {
+                                throw new Error(
+                                    `CSV request failed with status ${response.status}.`
+                                );
+                            }
+
+                            return response.blob();
                         }
-
-                        const csvFile =
-                            new File(
-                                [
-                                    blob
-                                ],
-                                backendCsvFilename,
-                                {
-                                    type:
-                                        blob.type ||
-                                        "text/csv"
-                                }
-                            );
-
-                        if (
-                            typeof DataTransfer !==
-                            "undefined"
+                    )
+                    .then(
+                        function (
+                            blob
                         ) {
-                            const transfer =
-                                new DataTransfer();
+                            if (
+                                csvHasLoaded
+                            ) {
+                                return;
+                            }
 
-                            transfer.items.add(
+                            if (
+                                blob.type &&
+                                blob.type.includes("text/html")
+                            ) {
+                                throw new Error(
+                                    `Response from ${currentUrl} was HTML, expected CSV.`
+                                );
+                            }
+
+                            const csvFile =
+                                new File(
+                                    [
+                                        blob
+                                    ],
+                                    rawFilename || "chart.csv",
+                                    {
+                                        type:
+                                            blob.type ||
+                                            "text/csv"
+                                    }
+                                );
+
+                            if (
+                                typeof DataTransfer !==
+                                "undefined"
+                            ) {
+                                const transfer =
+                                    new DataTransfer();
+
+                                transfer.items.add(
+                                    csvFile
+                                );
+
+                                const inputNode =
+                                    fileInput.node();
+
+                                inputNode.files =
+                                    transfer.files;
+
+                                inputNode.dispatchEvent(
+                                    new Event(
+                                        "change",
+                                        {
+                                            bubbles:
+                                                true
+                                        }
+                                    )
+                                );
+
+                                return;
+                            }
+
+                            const reader =
+                                new FileReader();
+
+                            reader.onload =
+                                function (
+                                    loadEvent
+                                ) {
+                                    csvHasLoaded =
+                                        true;
+
+                                    parseCSVAndRender(
+                                        loadEvent
+                                            .target
+                                            .result
+                                    );
+                                };
+
+                            reader.readAsText(
                                 csvFile
                             );
-
-                            const inputNode =
-                                fileInput.node();
-
-                            inputNode.files =
-                                transfer.files;
-
-                            inputNode.dispatchEvent(
-                                new Event(
-                                    "change",
-                                    {
-                                        bubbles:
-                                            true
-                                    }
-                                )
-                            );
-
-                            return;
                         }
-
-                        const reader =
-                            new FileReader();
-
-                        reader.onload =
-                            function (
-                                loadEvent
-                            ) {
-                                csvHasLoaded =
-                                    true;
-
-                                parseCSVAndRender(
-                                    loadEvent
-                                        .target
-                                        .result
-                                );
-                            };
-
-                        reader.readAsText(
-                            csvFile
-                        );
-                    }
-                )
-                .catch(
-                    function (
-                        error
-                    ) {
-                        console.error(
-                            `Parola chart ${uid}: Backend CSV could not be loaded.`,
+                    )
+                    .catch(
+                        function (
                             error
-                        );
-
-                        if (
-                            !csvHasLoaded
                         ) {
-                            displayErrorState(
-                                "Tracking metrics update pending"
-                            );
+                            // Try next candidate URL (including wp-content/chart/)
+                            tryFetchCandidate(urlIndex + 1);
                         }
-                    }
-                );
+                    );
+            }
+
+            tryFetchCandidate(0);
         }
 
         window.setTimeout(
