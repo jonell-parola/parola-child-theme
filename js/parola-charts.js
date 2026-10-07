@@ -3,7 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.86 - Space removed above short thick columns, firm ranking table dropdown with button filters removed, and wp-content/chart directory search fallback.
+ * 1.0.87 - Added Data Block, Count-Percentage Table, Modified Column to just be Short and not Thick, Removed Rank Column from Firm Ranking Table
  */
 (function () {
 
@@ -142,10 +142,11 @@
         );
 
         const defaultThickColumns = parseBoolAttr(
+            canvas.attr("data-short-columns") ||
             canvas.attr("data-thick-columns") ||
             canvas.attr("data-compact-columns") ||
             canvas.attr("data-thick-short-columns") ||
-            canvas.attr("data-short-columns") ||
+            canvas.attr("short-columns") ||
             canvas.attr("thick-short-columns") ||
             canvas.attr("thick-columns"),
             false
@@ -301,8 +302,16 @@
                 label: "Percentage Table"
             },
             {
+                value: "count-percentage",
+                label: "Count-Percentage"
+            },
+            {
                 value: "firm-ranking-table",
                 label: "Firm Ranking Table"
+            },
+            {
+                value: "data-block",
+                label: "Data Block"
             }
         ].forEach(function (item) {
             const option = typePicker
@@ -316,7 +325,9 @@
                 item.value === normalizedDefault ||
                 (item.value === "frequency-table" && (normalizedDefault === "frequencytable" || normalizedDefault === "frequency-table")) ||
                 (item.value === "percentage-table" && (normalizedDefault === "percentagetable" || normalizedDefault === "percentage-table" || normalizedDefault === "percentage")) ||
-                (item.value === "firm-ranking-table" && (normalizedDefault === "firmrankingtable" || normalizedDefault === "firm-ranking-table" || normalizedDefault === "industry-ranking-table" || normalizedDefault === "bulk-dataset-table" || normalizedDefault === "bulk-table" || normalizedDefault === "firm-ranking"))
+                (item.value === "count-percentage" && (normalizedDefault === "countpercentage" || normalizedDefault === "count-percentage" || normalizedDefault === "count-percentage-table")) ||
+                (item.value === "firm-ranking-table" && (normalizedDefault === "firmrankingtable" || normalizedDefault === "firm-ranking-table" || normalizedDefault === "industry-ranking-table" || normalizedDefault === "bulk-dataset-table" || normalizedDefault === "bulk-table" || normalizedDefault === "firm-ranking")) ||
+                (item.value === "data-block" && (normalizedDefault === "datablock" || normalizedDefault === "data-block" || normalizedDefault === "parola-data-block" || normalizedDefault === "parola-data-blocks" || normalizedDefault === "data-blocks"))
             ) {
                 option.property("selected", true);
             }
@@ -486,7 +497,7 @@
 
         const thickShortColumnsCheckbox = createCheckboxControl(
             columnOptionsWrapper,
-            "Thick & Short Columns",
+            "Shorter Columns",
             `thick-short-columns-${uid}`,
             defaultThickColumns
         );
@@ -1286,6 +1297,107 @@
             };
         }
 
+        // Helper: parse data block items from CSV
+        function extractDataBlockItems(rawRows, fallbackData) {
+            const items = [];
+
+            if (rawRows && rawRows.length >= 2) {
+                let labelRow = null;
+                let valueRow = null;
+
+                for (let r = 0; r < rawRows.length; r++) {
+                    const firstCell = String(rawRows[r][0] || "").trim().toLowerCase();
+                    if (firstCell === "label" && !labelRow) {
+                        labelRow = rawRows[r];
+                    } else if (firstCell === "value" && !valueRow) {
+                        valueRow = rawRows[r];
+                    }
+                }
+
+                if (labelRow && valueRow) {
+                    const maxCols = Math.max(labelRow.length, valueRow.length);
+                    for (let c = 1; c < maxCols; c++) {
+                        const lbl = String(labelRow[c] !== undefined ? labelRow[c] : "").trim();
+                        const val = valueRow[c] !== undefined ? String(valueRow[c]).trim() : "";
+                        if (lbl !== "" || val !== "") {
+                            items.push({ label: lbl, value: val });
+                        }
+                    }
+                    if (items.length > 0) {
+                        return items;
+                    }
+                }
+            }
+
+            if (fallbackData && fallbackData.length > 0) {
+                const firstRow = fallbackData[0];
+                const rowKeys = Object.keys(firstRow);
+
+                const labelKey = rowKeys.find(function (k) {
+                    return k.toLowerCase() === "label";
+                });
+                const valueKey = rowKeys.find(function (k) {
+                    return k.toLowerCase() === "value";
+                });
+
+                if (labelKey && valueKey) {
+                    fallbackData.forEach(function (row) {
+                        const lbl = String(row[labelKey] !== undefined ? row[labelKey] : "").trim();
+                        const val = row[valueKey] !== undefined ? String(row[valueKey]).trim() : "";
+                        if (lbl !== "" || val !== "") {
+                            items.push({ label: lbl, value: val });
+                        }
+                    });
+                    if (items.length > 0) return items;
+                }
+
+                if (fallbackData.length === 1 && rowKeys.length > 0 && !labelKey && !valueKey) {
+                    rowKeys.forEach(function (k) {
+                        if (
+                            k.toLowerCase() !== "description" &&
+                            k.toLowerCase() !== "title" &&
+                            k.toLowerCase() !== "subtitle"
+                        ) {
+                            items.push({
+                                label: k,
+                                value: String(firstRow[k] !== undefined ? firstRow[k] : "").trim()
+                            });
+                        }
+                    });
+                    if (items.length > 0) return items;
+                }
+
+                if (rowKeys.length >= 2) {
+                    const k0 = rowKeys[0];
+                    const k1 = rowKeys[1];
+                    fallbackData.forEach(function (row) {
+                        const lbl = String(row[k0] !== undefined ? row[k0] : "").trim();
+                        const val = row[k1] !== undefined ? String(row[k1]).trim() : "";
+                        if (lbl !== "" || val !== "") {
+                            items.push({ label: lbl, value: val });
+                        }
+                    });
+                    if (items.length > 0) return items;
+                }
+            }
+
+            return items;
+        }
+
+        function formatDataBlockValue(val) {
+            if (val === null || val === undefined) return "";
+            const str = String(val).trim();
+            if (str === "") return "";
+            if (str.includes(",") || str.endsWith("%") || isNaN(Number(str))) {
+                return str;
+            }
+            const num = Number(str);
+            if (!isNaN(num)) {
+                return num.toLocaleString();
+            }
+            return str;
+        }
+
         // =========================================================
         // MAIN CHART RENDERER
         // =========================================================
@@ -1534,7 +1646,9 @@
             if (
                 activeType === "frequency-table" ||
                 activeType === "percentage-table" ||
-                activeType === "firm-ranking-table"
+                activeType === "count-percentage" ||
+                activeType === "firm-ranking-table" ||
+                activeType === "data-block"
             ) {
                 svgOuter.style("display", "none");
             } else {
@@ -1576,7 +1690,19 @@
 
             contentRow
                 .selectAll(
+                    `.count-percentage-container-${uid}`
+                )
+                .remove();
+
+            contentRow
+                .selectAll(
                     `.firm-ranking-table-container-${uid}`
+                )
+                .remove();
+
+            contentRow
+                .selectAll(
+                    `.data-block-container-${uid}`
                 )
                 .remove();
 
@@ -2627,7 +2753,7 @@
                     null
                 );
 
-                const columnPadding = isThickShort ? 0.12 : 0.3;
+                const columnPadding = 0.3;
                 const columnDomainMultiplier = 1.1;
 
                 const xScale =
@@ -2813,8 +2939,7 @@
                     .exit()
                     .remove();
 
-                const barCornerRadius =
-                    isThickShort ? 6 : 4;
+                const barCornerRadius = 4;
 
                 const mergedBarPaths =
                     barPaths
@@ -8146,6 +8271,265 @@
             }
 
             // =====================================================
+            // COUNT-PERCENTAGE TABLE
+            // =====================================================
+
+            else if (
+                activeType === "count-percentage"
+            ) {
+                svgOuter.style(
+                    "display",
+                    "none"
+                );
+
+                const tableWrapper =
+                    contentRow
+                        .append(
+                            "div"
+                        )
+                        .attr(
+                            "class",
+                            `count-percentage-container-${uid}`
+                        )
+                        .style(
+                            "width",
+                            "100%"
+                        )
+                        .style(
+                            "display",
+                            "flex"
+                        )
+                        .style(
+                            "flex-direction",
+                            "column"
+                        )
+                        .style(
+                            "font-family",
+                            activeFont
+                        )
+                        .style(
+                            "box-sizing",
+                            "border-box"
+                        );
+
+                const descKey = keys.find(function (k) {
+                    return k.toLowerCase() === "description";
+                });
+
+                const firstColKey = categoryKey;
+
+                const remainingKeys = keys.filter(function (k) {
+                    return k !== firstColKey && k !== descKey;
+                });
+
+                const secondColKey = remainingKeys.find(function (k) {
+                    return k.toLowerCase() === "patents" || k.toLowerCase() === "count" || k.toLowerCase() === "value";
+                }) || remainingKeys[0] || keys[1] || keys[0];
+
+                const thirdColKey = remainingKeys.find(function (k) {
+                    return (
+                        k !== secondColKey &&
+                        (k.toLowerCase().includes("rate") ||
+                            k.toLowerCase().includes("percent") ||
+                            k.toLowerCase().includes("efficiency"))
+                    );
+                }) || remainingKeys.find(function (k) {
+                    return k !== secondColKey;
+                }) || remainingKeys[1] || secondColKey;
+
+                const table =
+                    tableWrapper
+                        .append(
+                            "table"
+                        )
+                        .style(
+                            "width",
+                            "100%"
+                        )
+                        .style(
+                            "border-collapse",
+                            "collapse"
+                        )
+                        .style(
+                            "border",
+                            "none"
+                        )
+                        .style(
+                            "table-layout",
+                            "auto"
+                        )
+                        .style(
+                            "font-size",
+                            `${Math.max(12, Math.round(14 * fontScale))}px`
+                        )
+                        .style(
+                            "color",
+                            "#333"
+                        );
+
+                const tbody =
+                    table.append(
+                        "tbody"
+                    );
+
+                const rowPaddingV =
+                    `${Math.max(8, Math.round(10 * fontScale))}px`;
+                const barThickness =
+                    `${Math.max(8, Math.round(10 * fontScale))}px`;
+
+                data.forEach(
+                    function (row) {
+                        const tr =
+                            tbody
+                                .append(
+                                    "tr"
+                                )
+                                .style(
+                                    "border-bottom",
+                                    "1px solid #e5e5e5"
+                                )
+                                .style(
+                                    "transition",
+                                    "background-color 0.15s ease"
+                                );
+
+                        const firstColVal =
+                            row[firstColKey] !== undefined
+                                ? row[firstColKey]
+                                : "";
+
+                        const secondColVal =
+                            row[secondColKey] !== undefined
+                                ? row[secondColKey]
+                                : "";
+
+                        const rawThirdVal =
+                            row[thirdColKey] !== undefined
+                                ? row[thirdColKey]
+                                : "";
+
+                        let numericPercent = 0;
+                        let displayPercent = "";
+                        let fillPercent = 0;
+
+                        if (typeof rawThirdVal === "string") {
+                            const trimmed = rawThirdVal.trim();
+                            if (trimmed.endsWith("%")) {
+                                numericPercent = parseFloat(trimmed.replace(/%/g, "")) || 0;
+                                fillPercent = Math.max(0, Math.min(100, numericPercent));
+                                displayPercent = trimmed;
+                            } else {
+                                numericPercent = parseFloat(trimmed) || 0;
+                                if (numericPercent > 0 && numericPercent <= 1) {
+                                    fillPercent = numericPercent * 100;
+                                    displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                } else {
+                                    fillPercent = Math.max(0, Math.min(100, numericPercent));
+                                    displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                }
+                            }
+                        } else if (typeof rawThirdVal === "number") {
+                            numericPercent = rawThirdVal;
+                            if (numericPercent > 0 && numericPercent <= 1) {
+                                fillPercent = numericPercent * 100;
+                                displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                            } else {
+                                fillPercent = Math.max(0, Math.min(100, numericPercent));
+                                displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                            }
+                        } else {
+                            displayPercent = String(rawThirdVal);
+                        }
+
+                        const displaySecondVal = typeof secondColVal === "number"
+                            ? secondColVal.toLocaleString()
+                            : String(secondColVal !== undefined ? secondColVal : "");
+
+                        // Column 1: Technology Center
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "left")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("white-space", "nowrap")
+                            .style("font-weight", "500")
+                            .style("color", "#333")
+                            .text(firstColVal);
+
+                        // Column 2: Patents (Count)
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "right")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("white-space", "nowrap")
+                            .style("font-weight", "500")
+                            .style("color", "#333")
+                            .text(displaySecondVal);
+
+                        // Column 3: Efficiency Rate (Percentage)
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "right")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("white-space", "nowrap")
+                            .style("font-weight", "600")
+                            .style("color", "#333")
+                            .text(displayPercent);
+
+                        // Column 4 (To the right of third column): Percentage Bar
+                        const barTd = tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("width", "100%")
+                            .style("min-width", "80px");
+
+                        const barTrack = barTd.append("div")
+                            .style("width", "100%")
+                            .style("height", barThickness)
+                            .style("background-color", "#e5e7eb")
+                            .style("border-radius", "9999px")
+                            .style("overflow", "hidden")
+                            .style("position", "relative")
+                            .style("box-sizing", "border-box");
+
+                        barTrack.append("div")
+                            .style("width", `${fillPercent}%`)
+                            .style("height", "100%")
+                            .style("background-color", "rgb(28, 167, 166)")
+                            .style("border-radius", "9999px")
+                            .style("transition", "width 0.3s ease");
+
+                        // Tooltip and hover interaction
+                        const desc = descKey
+                            ? row[descKey]
+                            : (currentDescriptions[firstColVal] || null);
+
+                        const tooltipContent =
+                            `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displaySecondVal}<br><strong>${thirdColKey}:</strong> ${displayPercent}`;
+
+                        tr.on("mouseover", function () {
+                            d3.select(this).style("background-color", "#f9fafb");
+                            tooltip.html(formatTooltipContent(tooltipContent, desc)).style("visibility", "visible");
+                        })
+                            .on("mousemove", function (event) {
+                                tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
+                            })
+                            .on("mouseout", function () {
+                                d3.select(this).style("background-color", "transparent");
+                                tooltip.style("visibility", "hidden");
+                            });
+                    }
+                );
+            }
+
+            // =====================================================
             // FIRM RANKING TABLE (Bulk Dataset Traversal)
             // =====================================================
 
@@ -8206,7 +8590,7 @@
                 });
 
                 // -------------------------------------------------
-                // Row 2: Table (6 columns)
+                // Row 2: Table (5 columns without Rank)
                 // -------------------------------------------------
                 const table = tableContainer
                     .append("table")
@@ -8223,7 +8607,6 @@
 
                 const columns = [
                     { key: "industry", label: "Industry", align: "left" },
-                    { key: "rank", label: "Rank", align: "center" },
                     { key: "position", label: "Position among firms", align: "left" },
                     { key: "patents", label: "Patents", align: "right" },
                     { key: "grantRate", label: "Grant rate", align: "right" },
@@ -8289,16 +8672,7 @@
                             .style("white-space", "nowrap")
                             .text(rec.industry || "");
 
-                        // 2. Rank
-                        tr.append("td")
-                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                            .style("text-align", "center")
-                            .style("font-weight", "600")
-                            .style("color", "#334155")
-                            .style("white-space", "nowrap")
-                            .text(rec.rank !== undefined ? rec.rank : "");
-
-                        // 3. Position among firms (colored dot + text)
+                        // 2. Position among firms (colored dot + text)
                         const posTd = tr.append("td")
                             .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                             .style("text-align", "left")
@@ -8323,7 +8697,7 @@
                         posWrapper.append("span")
                             .text(badgeInfo.label);
 
-                        // 4. Patents
+                        // 3. Patents
                         const formattedPatents = typeof rec.patents === "number"
                             ? rec.patents.toLocaleString()
                             : (rec.patents || "");
@@ -8336,7 +8710,7 @@
                             .style("white-space", "nowrap")
                             .text(formattedPatents);
 
-                        // 5. Grant rate
+                        // 4. Grant rate
                         tr.append("td")
                             .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                             .style("text-align", "right")
@@ -8345,7 +8719,7 @@
                             .style("white-space", "nowrap")
                             .text(rec.grantRate || "");
 
-                        // 6. YoY
+                        // 5. YoY
                         tr.append("td")
                             .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                             .style("text-align", "center")
@@ -8355,7 +8729,7 @@
                             .text(rec.yoy !== undefined ? rec.yoy : "");
 
                         // Tooltip and hover
-                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Rank:</strong> ${rec.rank}<br><strong>Position:</strong> ${badgeInfo.label}<br><strong>Patents:</strong> ${formattedPatents}<br><strong>Grant rate:</strong> ${rec.grantRate}<br><strong>YoY:</strong> ${rec.yoy}`;
+                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Position:</strong> ${badgeInfo.label}<br><strong>Patents:</strong> ${formattedPatents}<br><strong>Grant rate:</strong> ${rec.grantRate}<br><strong>YoY:</strong> ${rec.yoy}`;
 
                         tr.on("mouseover", function () {
                             d3.select(this).style("background-color", "#f8fafc");
@@ -8415,6 +8789,70 @@
 
                     itemDiv.append("span")
                         .text(item.label);
+                });
+            }
+
+            // =====================================================
+            // DATA BLOCK
+            // =====================================================
+
+            else if (
+                activeType === "data-block"
+            ) {
+                svgOuter.style(
+                    "display",
+                    "none"
+                );
+
+                const blockContainer = contentRow
+                    .append("div")
+                    .attr("class", `data-block-container-${uid} parola-data-blocks`)
+                    .style("width", "100%")
+                    .style("display", "grid")
+                    .style("gap", "0.5px")
+                    .style("background-color", "#787a7d")
+                    .style("border", "0.5px solid #787a7d")
+                    .style("box-sizing", "border-box")
+                    .style("font-family", activeFont);
+
+                const items = extractDataBlockItems(currentRawRows, data);
+
+                const numCols = Math.max(1, Math.min(items.length, 6));
+                blockContainer.style(
+                    "grid-template-columns",
+                    `repeat(${numCols}, minmax(0, 1fr))`
+                );
+
+                items.forEach(function (item) {
+                    const block = blockContainer
+                        .append("div")
+                        .attr("class", "parola-data-block")
+                        .style("display", "flex")
+                        .style("flex-direction", "column")
+                        .style("gap", "10px")
+                        .style("min-width", "0")
+                        .style("padding", `${Math.max(12, Math.round(15 * fontScale))}px`)
+                        .style("background-color", "#ffffff")
+                        .style("box-sizing", "border-box");
+
+                    block.append("div")
+                        .attr("class", "parola-data-block__label")
+                        .style("color", "#222222")
+                        .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                        .style("font-weight", "400")
+                        .style("line-height", "1.4")
+                        .style("text-transform", "uppercase")
+                        .style("font-family", activeFont)
+                        .text(item.label);
+
+                    block.append("div")
+                        .attr("class", "parola-data-block__value")
+                        .style("color", "#222222")
+                        .style("font-size", `${Math.max(22, Math.round(28 * fontScale))}px`)
+                        .style("font-weight", "500")
+                        .style("line-height", "1.2")
+                        .style("font-family", activeFont)
+                        .text(formatDataBlockValue(item.value));
                 });
             } else {
                 svgOuter.style(
