@@ -8367,6 +8367,32 @@
                             "#333"
                         );
 
+                const thead = table.append("thead");
+                const headerTr = thead.append("tr")
+                    .style("border-bottom", "2px solid #e2e8f0")
+                    .style("background-color", "#f8fafc");
+
+                const headerCols = [
+                    { label: firstColKey, align: "left" },
+                    { label: secondColKey, align: "right" },
+                    { label: thirdColKey, align: "right" },
+                    { label: "", align: "left" }
+                ];
+
+                const headPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
+                const cellPaddingH = "16px";
+
+                headerCols.forEach(function (col) {
+                    headerTr.append("th")
+                        .style("padding", `${headPaddingV} ${cellPaddingH}`)
+                        .style("text-align", col.align)
+                        .style("font-weight", "600")
+                        .style("color", "#475569")
+                        .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
+                        .style("white-space", "nowrap")
+                        .text(col.label);
+                });
+
                 const tbody =
                     table.append(
                         "tbody"
