@@ -3,6 +3,8 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
+ * 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row
+ * 1.0.88 - Added table headers for Count-Percentage Table
  * 1.0.87 - Added Data Block, Count-Percentage Table, Modified Column to just be Short and not Thick, Removed Rank Column from Firm Ranking Table
  */
 (function () {
@@ -8581,39 +8583,28 @@
                 const entities = rankingData.entities || [];
 
                 // -------------------------------------------------
-                // Row 1: Right-aligned Firm Selection Dropdown
+                // Row 1: First Row Entity Name
                 // -------------------------------------------------
-                const topRow = tableContainer
-                    .append("div")
-                    .style("display", "flex")
-                    .style("justify-content", "flex-end")
-                    .style("align-items", "center")
-                    .style("flex-wrap", "wrap")
-                    .style("gap", "10px")
-                    .style("margin-bottom", "16px")
-                    .style("width", "100%");
+                const firstEntityName = (entities[0] && entities[0].entityName) || "";
 
-                const firmSelect = topRow
-                    .append("select")
-                    .attr("class", `firm-ranking-select-${uid}`)
-                    .style("padding", "7px 14px")
-                    .style("font-size", `${Math.max(12, Math.round(14 * fontScale))}px`)
-                    .style("font-weight", "600")
-                    .style("color", "#1e293b")
-                    .style("background-color", "#ffffff")
-                    .style("border", "1px solid #cbd5e1")
-                    .style("border-radius", "6px")
-                    .style("cursor", "pointer")
-                    .style("outline", "none")
-                    .style("box-shadow", "0 1px 2px rgba(0,0,0,0.05)")
-                    .style("font-family", activeFont);
+                if (firstEntityName) {
+                    const topRow = tableContainer
+                        .append("div")
+                        .style("display", "flex")
+                        .style("justify-content", "flex-start")
+                        .style("align-items", "center")
+                        .style("margin-bottom", "14px")
+                        .style("width", "100%");
 
-                entities.forEach(function (ent, idx) {
-                    firmSelect
-                        .append("option")
-                        .attr("value", idx)
-                        .text(ent.entityName);
-                });
+                    topRow
+                        .append("div")
+                        .attr("class", `firm-ranking-entity-name-${uid}`)
+                        .style("font-size", `${Math.max(14, Math.round(16 * fontScale))}px`)
+                        .style("font-weight", "700")
+                        .style("color", "#1e293b")
+                        .style("font-family", activeFont)
+                        .text(firstEntityName);
+                }
 
                 // -------------------------------------------------
                 // Row 2: Table (5 columns without Rank)
@@ -8770,11 +8761,6 @@
                             });
                     });
                 }
-
-                firmSelect.on("change", function () {
-                    const selIdx = parseInt(this.value, 10) || 0;
-                    renderFirmTableRows(selIdx);
-                });
 
                 renderFirmTableRows(0);
 
