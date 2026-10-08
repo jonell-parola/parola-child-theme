@@ -3,6 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
+ * 1.0.90 - Added Description & Hover Popup for Percentage & Frequency Table
  * 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row
  * 1.0.88 - Added table headers for Count-Percentage Table
  * 1.0.87 - Added Data Block, Count-Percentage Table, Modified Column to just be Short and not Thick, Removed Rank Column from Firm Ranking Table
@@ -7719,6 +7720,11 @@
                     (valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
                     keys[0];
 
+                // Resolve description key for frequency table
+                const freqDescKey = keys.find(function (k) {
+                    return k.toLowerCase() === "description";
+                });
+
                 let totalVal = 0;
                 let maxVal = 0;
                 data.forEach(
@@ -7763,6 +7769,28 @@
                             "color",
                             "#333"
                         );
+
+                // Table header row
+                const freqThead = table.append("thead");
+                const freqHeaderTr = freqThead.append("tr")
+                    .style("border-bottom", "2px solid #e2e8f0")
+                    .style("background-color", "#f8fafc");
+                const freqHeadPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
+                [
+                    { label: firstColKey, align: "left" },
+                    { label: "", align: "left" },
+                    { label: secondColKey, align: "right" },
+                    { label: "description", align: "left" }
+                ].forEach(function (col) {
+                    freqHeaderTr.append("th")
+                        .style("padding", `${freqHeadPaddingV} 16px`)
+                        .style("text-align", col.align)
+                        .style("font-weight", "600")
+                        .style("color", "#475569")
+                        .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
+                        .style("white-space", "nowrap")
+                        .text(col.label);
+                });
 
                 const tbody =
                     table.append(
@@ -7993,12 +8021,23 @@
                                 displayCount
                             );
 
-                        // Tooltip and hover interaction
+                        // Column 4: Description
                         const desc =
-                            descriptionKey
-                                ? row[descriptionKey]
-                                : (currentDescriptions[firstColVal] || null);
+                            freqDescKey
+                                ? (row[freqDescKey] || "")
+                                : (currentDescriptions[firstColVal] || "");
 
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "left")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("color", "#555")
+                            .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                            .text(desc);
+
+                        // Tooltip and hover interaction
                         const tooltipContent =
                             `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displayCount}`;
 
@@ -8013,7 +8052,7 @@
                                     .html(
                                         formatTooltipContent(
                                             tooltipContent,
-                                            desc
+                                            desc || null
                                         )
                                     )
                                     .style(
@@ -8102,6 +8141,11 @@
                     (valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
                     keys[0];
 
+                // Resolve description key for percentage table
+                const pctDescKey = keys.find(function (k) {
+                    return k.toLowerCase() === "description";
+                });
+
                 const table =
                     tableWrapper
                         .append(
@@ -8131,6 +8175,28 @@
                             "color",
                             "#333"
                         );
+
+                // Table header row
+                const pctThead = table.append("thead");
+                const pctHeaderTr = pctThead.append("tr")
+                    .style("border-bottom", "2px solid #e2e8f0")
+                    .style("background-color", "#f8fafc");
+                const pctHeadPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
+                [
+                    { label: firstColKey, align: "left" },
+                    { label: "", align: "left" },
+                    { label: secondColKey, align: "right" },
+                    { label: "description", align: "left" }
+                ].forEach(function (col) {
+                    pctHeaderTr.append("th")
+                        .style("padding", `${pctHeadPaddingV} 16px`)
+                        .style("text-align", col.align)
+                        .style("font-weight", "600")
+                        .style("color", "#475569")
+                        .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
+                        .style("white-space", "nowrap")
+                        .text(col.label);
+                });
 
                 const tbody =
                     table.append(
@@ -8249,17 +8315,29 @@
                             .style("color", "#333")
                             .text(displayCount);
 
-                        // Tooltip and hover interaction
-                        const desc = descriptionKey
-                            ? row[descriptionKey]
-                            : (currentDescriptions[firstColVal] || null);
+                        // Column 4: Description
+                        const pctDesc =
+                            pctDescKey
+                                ? (row[pctDescKey] || "")
+                                : (currentDescriptions[firstColVal] || "");
 
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "left")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("color", "#555")
+                            .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                            .text(pctDesc);
+
+                        // Tooltip and hover interaction
                         const tooltipContent =
                             `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displayCount}`;
 
                         tr.on("mouseover", function () {
                             d3.select(this).style("background-color", "#f9fafb");
-                            tooltip.html(formatTooltipContent(tooltipContent, desc)).style("visibility", "visible");
+                            tooltip.html(formatTooltipContent(tooltipContent, pctDesc || null)).style("visibility", "visible");
                         })
                             .on("mousemove", function (event) {
                                 tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
