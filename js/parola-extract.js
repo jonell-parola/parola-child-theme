@@ -1,10 +1,11 @@
-﻿/**
+/**
  * Parola Bulk Dataset Extractor
  *
- * Reads the "Sample Bulk Dataset - Jenny version.csv" from
- * wp-content/chart/ and generates one Excel workbook per data row
+ * Reads the bulk dataset ("Sample Bulk Dataset - Jenny version.csv" or .xlsx)
+ * from wp-content/charts/ and generates one Excel workbook per data row
  * (starting from row 4). Each workbook is named after the entity name
- * and contains multiple sheets based on the marker row (row 1).
+ * and saved/outputted directly into "wp-content/charts/" (overwriting any
+ * duplicate file).
  *
  * Sheet mapping:
  *   Stat A, Stat B, ... Stat F  -> Data Block Template sheets
@@ -17,12 +18,13 @@
  *   - ExcelJS  4.4.0  (https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js)
  *   - PapaParse 5.x
  *
- * CPC descriptions  -> same directory as this file: cpc_descriptions.csv
- * TC definitions    -> same directory as this file: TC Definitions.csv
- * Output            -> browser download (one .xlsx per entity)
+ * CPC descriptions  -> cpc_descriptions.csv (same dir as this script)
+ * TC definitions    -> TC Definitions.csv (same dir as this script)
+ * Output Target     -> Server "wp-content/charts/{entityName}.xlsx"
  *
- * Usage: Call window.parolaExtractBulkDataset() from the browser console
- *        or a button click after the page has loaded.
+ * Usage:
+ *   window.parolaExtractBulkDataset(); // Processes wp-content/charts/Sample Bulk Dataset - Jenny version
+ *   window.parolaExtractBulkDataset({ download: true }); // Also triggers browser download
  */
 
 (function () {
@@ -38,13 +40,13 @@
                 return scripts[i].src.substring(0, scripts[i].src.lastIndexOf("/") + 1);
             }
         }
-        return "/wp-content/themes/parola-child-theme/additional-charts/";
+        return "/wp-content/themes/parola-child-theme/js/";
     }
 
     var SCRIPT_DIR = getScriptDir();
 
     /* ------------------------------------------------------------------
-     * 1. CSV helpers
+     * 1. Data loading helpers (CSV + Excel)
      * ------------------------------------------------------------------ */
 
     /** Fetch and parse a CSV into a 2-D array of raw strings (no header mapping). */
@@ -53,9 +55,59 @@
             Papa.parse(url, {
                 download: true,
                 skipEmptyLines: false,
-                complete: function (results) { resolve(results.data); },
+                complete: function (results) {
+                    if (results.errors && results.errors.length > 0 && (!results.data || results.data.length === 0)) {
+                        reject(new Error("PapaParse error: " + JSON.stringify(results.errors)));
+                    } else {
+                        resolve(results.data);
+                    }
+                },
                 error: function (err) { reject(err); }
             });
+        });
+    }
+
+    /** Fetch and parse an Excel .xlsx into a 2-D array of strings. */
+    function fetchExcelAsRows(url) {
+        return fetch(url)
+            .then(function (res) {
+                if (!res.ok) throw new Error("HTTP " + res.status + " " + res.statusText);
+                return res.arrayBuffer();
+            })
+            .then(function (buffer) {
+                var wb = new ExcelJS.Workbook();
+                return wb.xlsx.load(buffer).then(function () {
+                    var ws = wb.worksheets[0];
+                    if (!ws) throw new Error("No worksheets found in " + url);
+                    var rows = [];
+                    var maxCols = ws.columnCount || 50;
+                    ws.eachRow({ includeEmpty: true }, function (row) {
+                        var rowValues = [];
+                        for (var c = 1; c <= maxCols; c++) {
+                            var cell = row.getCell(c);
+                            var val = cell.value;
+                            if (val === null || val === undefined) val = "";
+                            else if (typeof val === "object") {
+                                if (val.text !== undefined) val = val.text;
+                                else if (val.result !== undefined) val = val.result;
+                                else val = JSON.stringify(val);
+                            }
+                            rowValues.push(String(val));
+                        }
+                        rows.push(rowValues);
+                    });
+                    return rows;
+                });
+            });
+    }
+
+    /** Load raw dataset (supports both CSV and XLSX). */
+    function fetchDataset(url) {
+        if (/\.xlsx?$/i.test(url)) {
+            return fetchExcelAsRows(url);
+        }
+        return fetchRawCsv(url).catch(function () {
+            return fetchExcelAsRows(url);
         });
     }
 
@@ -148,115 +200,122 @@
      */
     function addDataBlockSheet(wb, sheetName, label, value) {
         var ws = wb.addWorksheet(sheetName);
-        var labelRow = ws.addRow(["Label", label]);
-        labelRow.getCell(1).font = HEADER_FONT;
-        var valueRow = ws.addRow(["Value", value]);
-        valueRow.getCell(2).font = { bold: true, size: 14 };
-        ws.getColumn(1).width = 12;
+        var r1 = ws.addRow(["Label", label || ""]);
+        var r2 = ws.addRow(["Value", value !== undefined ? String(value) : ""]);
+        r1.getCell(1).font = { bold: true, size: 11, color: { argb: "FF475569" } };
+        r2.getCell(1).font = { bold: true, size: 11, color: { argb: "FF475569" } };
+        r2.getCell(2).font = { bold: true, size: 14 };
+        ws.getColumn(1).width = 16;
         ws.getColumn(2).width = 40;
     }
 
     /**
-     * Frequency Table sheet (Chart A - CPC Breakdown)
-     * Row 1: Title | <header from row 3>
-     * Row 2: Subtitle | (blank)
-     * Row 3: CPC | Count | description  <- column headers
-     * Row 4+: data rows
+     * Frequency Table sheet (Chart A)
+     * Row 1: Title | Technology Breakdown (CPC)
+     * Row 2: Subtitle |
+     * Row 3: CPC Section | Description | Frequency
      */
     function addFrequencySheet(wb, sheetName, title, pairs, cpcDescMap) {
         var ws = wb.addWorksheet(sheetName);
-        addTitleRows(ws, title, "");
-        var hdr = ws.addRow(["CPC", "Count", "description"]);
-        hdr.eachCell(function (cell) {
+        addTitleRows(ws, title || "Technology Breakdown (CPC)", "");
+        var headRow = ws.addRow(["CPC Section", "Description", "Frequency"]);
+        headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
         pairs.forEach(function (pair) {
             var desc = cpcDescMap[pair.key] || "";
-            var numVal = Number(pair.value);
-            var row = ws.addRow([pair.key, isNaN(numVal) ? pair.value : numVal, desc]);
+            var freq = parseFloat(pair.value) || pair.value;
+            var row = ws.addRow([pair.key, desc, freq]);
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
-        ws.getColumn(1).width = 14;
-        ws.getColumn(2).width = 12;
-        ws.getColumn(3).width = 60;
+        ws.getColumn(1).width = 16;
+        ws.getColumn(2).width = 45;
+        ws.getColumn(3).width = 16;
     }
 
     /**
-     * Count-Percentage sheet (Chart B + Chart D - Tech Center)
-     * Row 1: Title | "Tech Center"
-     * Row 2: Subtitle | (blank)
-     * Row 3: Technology Center | description | Patents | Efficiency Rate  <- headers
-     * Row 4+: data
+     * Count-Percentage sheet (Tech Center / Chart B + Chart D)
+     * Row 1: Title | Tech Center
+     * Row 2: Subtitle |
+     * Row 3: TC | TC Description | Count | Percentage
      */
-    function addCountPercentageSheet(wb, sheetName, chartBPairs, chartDPairs, tcDescMap) {
+    function addCountPercentageSheet(wb, sheetName, countPairs, pctPairs, tcDescMap) {
         var ws = wb.addWorksheet(sheetName);
-        addTitleRows(ws, "Tech Center", "");
-        var hdr = ws.addRow(["Technology Center", "description", "Patents", "Efficiency Rate"]);
-        hdr.eachCell(function (cell) {
+        addTitleRows(ws, "Tech Center Breakdown", "");
+
+        var pctMap = {};
+        pctPairs.forEach(function (p) {
+            pctMap[p.key] = p.value;
+            pctMap[stripTC(p.key)] = p.value;
+        });
+
+        var headRow = ws.addRow(["TC", "TC Description", "Count", "Percentage"]);
+        headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
-        // Build efficiency lookup from Chart D
-        var effMap = {};
-        chartDPairs.forEach(function (p) { effMap[stripTC(p.key)] = p.value; });
 
-        chartBPairs.forEach(function (pair) {
-            var tc = stripTC(pair.key);
-            var desc = tcDescMap[tc] || "";
-            var eff = effMap[tc] !== undefined ? effMap[tc] : "";
-            var numVal = Number(pair.value);
-            var row = ws.addRow([tc, desc, isNaN(numVal) ? pair.value : numVal, eff]);
+        countPairs.forEach(function (cp) {
+            var rawTC = cp.key;
+            var numTC = stripTC(rawTC);
+            var desc = tcDescMap[numTC] || tcDescMap[rawTC] || "";
+            var countVal = parseFloat(cp.value) || cp.value;
+            var pctVal = pctMap[rawTC] || pctMap[numTC] || "";
+            var row = ws.addRow([rawTC, desc, countVal, pctVal]);
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
-        ws.getColumn(1).width = 22;
-        ws.getColumn(2).width = 60;
+
+        ws.getColumn(1).width = 14;
+        ws.getColumn(2).width = 45;
         ws.getColumn(3).width = 14;
-        ws.getColumn(4).width = 18;
+        ws.getColumn(4).width = 16;
     }
 
     /**
-     * Pie/Bar sheet (Chart E - Top Clients)
-     * Row 1: Title | <header from row 3>
-     * Row 2: Subtitle | (blank)
-     * Row 3: Client | Count | description  <- headers
-     * Row 4+: data (description left blank)
+     * Pie/Bar Chart sheet (Chart E / Top Clients)
+     * Row 1: Title | Top Clients
+     * Row 2: Subtitle |
+     * Row 3: Client | Patents
      */
     function addPieBarSheet(wb, sheetName, title, pairs) {
         var ws = wb.addWorksheet(sheetName);
-        addTitleRows(ws, title, "");
-        var hdr = ws.addRow(["Client", "Count", "description"]);
-        hdr.eachCell(function (cell) {
+        addTitleRows(ws, title || "Top Clients", "");
+        var headRow = ws.addRow(["Client", "Patents"]);
+        headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
         pairs.forEach(function (pair) {
-            var numVal = Number(pair.value);
-            var row = ws.addRow([pair.key, isNaN(numVal) ? pair.value : numVal, ""]);
+            var val = parseFloat(pair.value) || pair.value;
+            var row = ws.addRow([pair.key, val]);
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
-        ws.getColumn(1).width = 50;
-        ws.getColumn(2).width = 12;
-        ws.getColumn(3).width = 30;
+        ws.getColumn(1).width = 35;
+        ws.getColumn(2).width = 16;
     }
 
     /**
-     * Firm Ranking sheet (Industry A...E columns combined)
-     * Row 1: Entity name
-     * Row 2: (spacer)
-     * Row 3: Industry | Position among Firms | Granted Patents | Efficiency Rate  <- headers
-     * Row 4+: one row per industry
+     * Firm Ranking Table sheet (Industry A...E)
+     * Row 1: Entity Name | <firm name>
+     * Row 2: Industry | Industry Position | Number of Granted Patents | Efficiency Rate
      */
     function addFirmRankingSheet(wb, sheetName, entityName, industries) {
         var ws = wb.addWorksheet(sheetName);
-        var nameRow = ws.addRow([entityName]);
-        nameRow.getCell(1).font = { bold: true, size: 14, color: { argb: "FF1E293B" } };
-        ws.addRow([]); // spacer
-        var hdr = ws.addRow(["Industry", "Position among Firms", "Granted Patents", "Efficiency Rate"]);
-        hdr.eachCell(function (cell) {
+        var r1 = ws.addRow(["Entity Name", entityName]);
+        r1.getCell(1).font = { bold: true, size: 11, color: { argb: "FF475569" } };
+        r1.getCell(2).font = TITLE_FONT;
+
+        var headRow = ws.addRow([
+            "Industry",
+            "Industry Position",
+            "Number of Granted Patents",
+            "Efficiency Rate"
+        ]);
+        headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
@@ -272,8 +331,46 @@
     }
 
     /* ------------------------------------------------------------------
-     * 7. Browser download helper
+     * 7. Save to server / Browser download helpers
      * ------------------------------------------------------------------ */
+
+    /** Save Excel workbook directly to server "wp-content/charts/" (overwrites). */
+    function saveWorkbookToServer(wb, filename) {
+        return wb.xlsx.writeBuffer().then(function (buffer) {
+            var config = window.parolaExtractConfig || {};
+            var ajaxUrl = config.ajaxUrl || "/wp-admin/admin-ajax.php";
+            var nonce = config.nonce || "";
+
+            var binary = "";
+            var bytes = new Uint8Array(buffer);
+            var len = bytes.byteLength;
+            for (var i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            var base64Data = window.btoa(binary);
+
+            var formData = new FormData();
+            formData.append("action", "parola_save_chart_file");
+            formData.append("filename", filename + ".xlsx");
+            formData.append("filedata", base64Data);
+            if (nonce) formData.append("nonce", nonce);
+
+            return fetch(ajaxUrl, {
+                method: "POST",
+                body: formData
+            }).then(function (res) {
+                return res.json();
+            }).then(function (json) {
+                if (json && json.success) {
+                    return json.data;
+                } else {
+                    throw new Error((json && json.data && json.data.message) || "Failed to save file on server.");
+                }
+            });
+        });
+    }
+
+    /** Trigger a client-side browser download for the workbook. */
     function downloadWorkbook(wb, filename) {
         return wb.xlsx.writeBuffer().then(function (buffer) {
             var blob = new Blob([buffer], {
@@ -294,21 +391,41 @@
      * 8. Main extraction entry point
      * ------------------------------------------------------------------ */
     /**
-     * window.parolaExtractBulkDataset([bulkCsvUrl])
+     * window.parolaExtractBulkDataset(options)
      *
-     * Fetches the bulk dataset, cpc_descriptions.csv, and TC Definitions.csv,
-     * then for each data row (row 4+) generates and downloads one Excel file.
-     * Files are named after the entity name in column 0.
+     * Fetches the source bulk dataset ("Sample Bulk Dataset - Jenny version"),
+     * cpc_descriptions.csv, and TC Definitions.csv.
+     * Generates one Excel workbook per data row (starting from row 4),
+     * named after the entity name in column 0, and writes/overwrites it
+     * into "wp-content/charts/".
      *
-     * @param {string} [bulkCsvUrl] - Override path for the bulk CSV.
-     *                                Defaults to /wp-content/chart/Sample Bulk Dataset - Jenny version.csv
+     * @param {string|object} [options]
+     *   If string: path/URL override for the bulk dataset.
+     *   If object: {
+     *       sourceUrl: string,      // Custom path/URL
+     *       download: boolean,       // Trigger browser download in addition to saving (default: false)
+     *       saveToServer: boolean   // Save to wp-content/charts/ (default: true)
+     *   }
      */
-    window.parolaExtractBulkDataset = function (bulkCsvUrl) {
-        var csvUrl = bulkCsvUrl || "/wp-content/chart/Sample Bulk Dataset - Jenny version.csv";
-        var cpcUrl = SCRIPT_DIR + "cpc_descriptions.csv";
-        var tcUrl = SCRIPT_DIR + "TC Definitions.csv";
+    window.parolaExtractBulkDataset = function (options) {
+        var config = window.parolaExtractConfig || {};
+        var sourceUrl = "/wp-content/charts/Sample Bulk Dataset - Jenny version.csv";
+        var alsoDownload = false;
+        var saveToServer = true;
 
-        // Optional status element for showing progress on the page
+        if (typeof options === "string") {
+            sourceUrl = options;
+        } else if (options && typeof options === "object") {
+            if (options.sourceUrl) sourceUrl = options.sourceUrl;
+            if (options.download !== undefined) alsoDownload = !!options.download;
+            if (options.saveToServer !== undefined) saveToServer = !!options.saveToServer;
+        } else if (config.defaultCsvUrl) {
+            sourceUrl = config.defaultCsvUrl;
+        }
+
+        var cpcUrl = SCRIPT_DIR + "cpc_descriptions.csv";
+        var tcUrl  = SCRIPT_DIR + "TC Definitions.csv";
+
         var statusEl = document.getElementById("parola-extract-status");
         function setStatus(msg) {
             console.log("[parola-extract] " + msg);
@@ -324,16 +441,16 @@
             return;
         }
 
-        setStatus("Loading reference data...");
+        setStatus("Loading reference data and bulk dataset from " + sourceUrl + "...");
 
         Promise.all([
-            fetchRawCsv(csvUrl),
+            fetchDataset(sourceUrl),
             fetchCsvAsObjects(cpcUrl),
             fetchCsvAsObjects(tcUrl)
         ]).then(function (results) {
-            var rawRows  = results[0];
-            var cpcRows  = results[1];
-            var tcRows   = results[2];
+            var rawRows = results[0];
+            var cpcRows = results[1];
+            var tcRows  = results[2];
 
             /* --- Build lookup maps --- */
             var cpcDescMap = {};
@@ -373,28 +490,24 @@
                 else if (/^Industry\s+[A-Z]$/i.test(marker)) { industryCols[marker] = idx; }
             });
 
-            // Sort industry markers by column order
             var industryMarkersSorted = Object.keys(industryCols).sort(function (a, b) {
                 return industryCols[a] - industryCols[b];
             });
 
-            /* --- Process each data row (index 3 onward) --- */
+            /* --- Process data rows (Row 4+) --- */
             var dataRows = rawRows.slice(3);
-            var totalRows = 0;
-            dataRows.forEach(function (r) {
-                if (r && r.length > 0 && (r[0] || "").trim()) totalRows++;
-            });
-
-            setStatus("Processing " + totalRows + " entities...");
+            var totalRows = dataRows.length;
             var processedCount = 0;
+
+            setStatus("Found " + totalRows + " entity rows. Processing into wp-content/charts/...");
 
             function processNext(idx) {
                 if (idx >= dataRows.length) {
-                    setStatus("Done! " + processedCount + " Excel files downloaded.");
+                    setStatus("Extraction complete! Successfully processed " + processedCount + " files to wp-content/charts/.");
                     return;
                 }
 
-                var dataRow    = dataRows[idx];
+                var dataRow = dataRows[idx];
                 var entityName = (dataRow[0] || "").trim();
 
                 if (!entityName) {
@@ -432,10 +545,10 @@
 
                 /* ---- Chart B + Chart D --> Count-Percentage (Tech Center) ---- */
                 if (chartCols["Chart B"] !== undefined && chartCols["Chart D"] !== undefined) {
-                    var bIdx    = chartCols["Chart B"];
-                    var dIdx    = chartCols["Chart D"];
-                    var bPairs  = parseKeyValuePairs((dataRow[bIdx] || "").trim());
-                    var dPairs  = parseKeyValuePairs((dataRow[dIdx] || "").trim());
+                    var bIdx   = chartCols["Chart B"];
+                    var dIdx   = chartCols["Chart D"];
+                    var bPairs = parseKeyValuePairs((dataRow[bIdx] || "").trim());
+                    var dPairs = parseKeyValuePairs((dataRow[dIdx] || "").trim());
                     if (bPairs.length > 0) {
                         addCountPercentageSheet(wb, "Tech Center", bPairs, dPairs, tcDescMap);
                     }
@@ -483,17 +596,38 @@
                     addFirmRankingSheet(wb, "Industry Ranking", entityName, industries);
                 }
 
-                /* ---- Download workbook ---- */
-                downloadWorkbook(wb, safeFilename(entityName))
-                    .then(function () {
+                /* ---- Output workbook to wp-content/charts/ (and optional download) ---- */
+                var filename = safeFilename(entityName);
+                var savePromise = saveToServer
+                    ? saveWorkbookToServer(wb, filename)
+                    : Promise.resolve();
+
+                savePromise
+                    .then(function (result) {
+                        if (alsoDownload) {
+                            return downloadWorkbook(wb, filename).then(function () { return result; });
+                        }
+                        return result;
+                    })
+                    .then(function (res) {
                         processedCount++;
-                        setStatus("Downloaded " + processedCount + " / " + totalRows + ": " + entityName);
-                        setTimeout(function () { processNext(idx + 1); }, 300);
+                        var savedMsg = res && res.path ? res.path : ("wp-content/charts/" + filename + ".xlsx");
+                        setStatus("Saved " + processedCount + " / " + totalRows + ": " + savedMsg);
+                        setTimeout(function () { processNext(idx + 1); }, 100);
                     })
                     .catch(function (err) {
-                        console.error("[parola-extract] Error for " + entityName, err);
-                        setStatus("Error on: " + entityName + " - " + (err.message || err));
-                        setTimeout(function () { processNext(idx + 1); }, 300);
+                        console.warn("[parola-extract] Server save notice for " + entityName + ":", err);
+                        // Fallback to browser download if server save failed
+                        downloadWorkbook(wb, filename)
+                            .then(function () {
+                                processedCount++;
+                                setStatus("Downloaded (fallback) " + processedCount + " / " + totalRows + ": " + entityName);
+                                setTimeout(function () { processNext(idx + 1); }, 200);
+                            })
+                            .catch(function (downErr) {
+                                setStatus("Error on: " + entityName + " - " + (downErr.message || downErr));
+                                setTimeout(function () { processNext(idx + 1); }, 200);
+                            });
                     });
             }
 
@@ -501,7 +635,7 @@
 
         }).catch(function (err) {
             console.error("[parola-extract] Failed to load source data:", err);
-            setStatus("Error loading data: " + (err.message || err));
+            setStatus("Error loading source dataset: " + (err.message || err));
         });
     };
 
