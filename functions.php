@@ -293,7 +293,7 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.0.2', // Fixed Dynamic Script Directory, Definitions Reference URLs, Source Dataset Path
+        '1.1.0', // 1.1.0 - Added interactive .d3-extract dashboard, dataset selector, entity multi-select, overwrite prompt & progress
         true
     );
 
@@ -357,6 +357,81 @@ function parola_ajax_save_chart_file() {
 }
 add_action( 'wp_ajax_parola_save_chart_file', 'parola_ajax_save_chart_file' );
 add_action( 'wp_ajax_nopriv_parola_save_chart_file', 'parola_ajax_save_chart_file' );
+
+/**
+ * AJAX Handler: List CSV and Excel files in wp-content/chart/
+ */
+function parola_ajax_list_chart_files() {
+    if ( isset( $_POST['nonce'] ) ) {
+        check_ajax_referer( 'parola_extract_nonce', 'nonce' );
+    }
+
+    $chart_dir = WP_CONTENT_DIR . '/chart';
+    if ( ! file_exists( $chart_dir ) ) {
+        wp_mkdir_p( $chart_dir );
+    }
+
+    $files = array();
+    $dir_handle = @opendir( $chart_dir );
+    if ( $dir_handle ) {
+        while ( false !== ( $entry = readdir( $dir_handle ) ) ) {
+            if ( $entry === '.' || $entry === '..' || strpos( $entry, '~$' ) === 0 ) {
+                continue;
+            }
+            if ( preg_match( '/\.(csv|xlsx|xls)$/i', $entry ) ) {
+                $file_path = $chart_dir . '/' . $entry;
+                $files[] = array(
+                    'name'  => $entry,
+                    'url'   => content_url( '/chart/' . rawurlencode( $entry ) ),
+                    'size'  => file_exists( $file_path ) ? filesize( $file_path ) : 0,
+                    'mtime' => file_exists( $file_path ) ? filemtime( $file_path ) : 0,
+                );
+            }
+        }
+        closedir( $dir_handle );
+    }
+
+    // Sort files alphabetically
+    usort( $files, function( $a, $b ) {
+        return strcasecmp( $a['name'], $b['name'] );
+    });
+
+    wp_send_json_success( array(
+        'files'       => $files,
+        'chartDirUrl' => content_url( '/chart/' ),
+    ) );
+}
+add_action( 'wp_ajax_parola_list_chart_files', 'parola_ajax_list_chart_files' );
+add_action( 'wp_ajax_nopriv_parola_list_chart_files', 'parola_ajax_list_chart_files' );
+
+/**
+ * AJAX Handler: Check which entity files already exist in wp-content/chart/
+ */
+function parola_ajax_check_existing_files() {
+    if ( isset( $_POST['nonce'] ) ) {
+        check_ajax_referer( 'parola_extract_nonce', 'nonce' );
+    }
+
+    $filenames = isset( $_POST['filenames'] ) ? (array) $_POST['filenames'] : array();
+    $chart_dir = WP_CONTENT_DIR . '/chart';
+    $existing  = array();
+
+    foreach ( $filenames as $name ) {
+        $safe_name = sanitize_file_name( wp_unslash( $name ) );
+        if ( ! preg_match( '/\.(xlsx|xls|csv)$/i', $safe_name ) ) {
+            $safe_name .= '.xlsx';
+        }
+        if ( file_exists( $chart_dir . '/' . $safe_name ) ) {
+            $existing[] = $safe_name;
+        }
+    }
+
+    wp_send_json_success( array(
+        'existing' => $existing,
+    ) );
+}
+add_action( 'wp_ajax_parola_check_existing_files', 'parola_ajax_check_existing_files' );
+add_action( 'wp_ajax_nopriv_parola_check_existing_files', 'parola_ajax_check_existing_files' );
 
 
 /**
