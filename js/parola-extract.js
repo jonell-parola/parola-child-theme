@@ -1,29 +1,37 @@
 /**
  * Parola Bulk Dataset Extractor
- *
+ * 1.0.2
+ * 
  * Reads the bulk dataset ("Sample Bulk Dataset - Jenny version.csv" or .xlsx)
- * from wp-content/charts/ and generates one Excel workbook per data row
+ * from /wp-content/chart/ and generates one Excel workbook per data row
  * (starting from row 4). Each workbook is named after the entity name
- * and saved/outputted directly into "wp-content/charts/" (overwriting any
- * duplicate file).
+ * and saved directly into "wp-content/chart/" (overwriting any duplicate file).
  *
- * Sheet mapping:
- *   Stat A, Stat B, ... Stat F  -> Data Block Template sheets
- *   Chart A                     -> Frequency Table sheet (CPC Breakdown)
- *   Chart B + Chart D           -> Count-Percentage sheet (Tech Center)
- *   Chart E                     -> Pie/Bar sheet (Top Clients)
- *   Industry A ... Industry E   -> Firm Ranking Table sheet
+ * WordPress Server File Structure:
+ *   public_html/
+ *   └── wp-content/
+ *       ├── chart/
+ *       │   └── Sample Bulk Dataset - Jenny version.csv
+ *       │
+ *       └── themes/
+ *           └── bricks-child/
+ *               ├── functions.php
+ *               └── js/
+ *                   ├── cpc_descriptions.csv
+ *                   ├── TC Definitions.csv
+ *                   ├── parola-charts.js
+ *                   └── parola-extract.js
  *
  * Dependencies (loaded by functions.php via WordPress):
  *   - ExcelJS  4.4.0  (https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js)
- *   - PapaParse 5.x
+ *   - PapaParse 5.x   (https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js)
  *
- * CPC descriptions  -> cpc_descriptions.csv (same dir as this script)
- * TC definitions    -> TC Definitions.csv (same dir as this script)
- * Output Target     -> Server "wp-content/charts/{entityName}.xlsx"
+ * CPC descriptions  -> /wp-content/themes/bricks-child/js/cpc_descriptions.csv
+ * TC definitions    -> /wp-content/themes/bricks-child/js/TC Definitions.csv
+ * Output Target     -> Server "/wp-content/chart/{entityName}.xlsx"
  *
  * Usage:
- *   window.parolaExtractBulkDataset(); // Processes wp-content/charts/Sample Bulk Dataset - Jenny version
+ *   window.parolaExtractBulkDataset(); // Processes /wp-content/chart/Sample Bulk Dataset - Jenny version.csv
  *   window.parolaExtractBulkDataset({ download: true }); // Also triggers browser download
  */
 
@@ -34,13 +42,16 @@
      * 0. Locate script directory (used for side-car CSV references)
      * ------------------------------------------------------------------ */
     function getScriptDir() {
+        if (document.currentScript && document.currentScript.src) {
+            return document.currentScript.src.substring(0, document.currentScript.src.lastIndexOf("/") + 1);
+        }
         var scripts = document.getElementsByTagName("script");
         for (var i = 0; i < scripts.length; i++) {
             if (scripts[i].src && scripts[i].src.indexOf("parola-extract") !== -1) {
                 return scripts[i].src.substring(0, scripts[i].src.lastIndexOf("/") + 1);
             }
         }
-        return "/wp-content/themes/parola-child-theme/js/";
+        return "/wp-content/themes/bricks-child/js/";
     }
 
     var SCRIPT_DIR = getScriptDir();
@@ -334,7 +345,7 @@
      * 7. Save to server / Browser download helpers
      * ------------------------------------------------------------------ */
 
-    /** Save Excel workbook directly to server "wp-content/charts/" (overwrites). */
+    /** Save Excel workbook directly to server "wp-content/chart/" (overwrites). */
     function saveWorkbookToServer(wb, filename) {
         return wb.xlsx.writeBuffer().then(function (buffer) {
             var config = window.parolaExtractConfig || {};
@@ -397,19 +408,19 @@
      * cpc_descriptions.csv, and TC Definitions.csv.
      * Generates one Excel workbook per data row (starting from row 4),
      * named after the entity name in column 0, and writes/overwrites it
-     * into "wp-content/charts/".
+     * into "/wp-content/chart/".
      *
      * @param {string|object} [options]
      *   If string: path/URL override for the bulk dataset.
      *   If object: {
      *       sourceUrl: string,      // Custom path/URL
      *       download: boolean,       // Trigger browser download in addition to saving (default: false)
-     *       saveToServer: boolean   // Save to wp-content/charts/ (default: true)
+     *       saveToServer: boolean   // Save to wp-content/chart/ (default: true)
      *   }
      */
     window.parolaExtractBulkDataset = function (options) {
         var config = window.parolaExtractConfig || {};
-        var sourceUrl = "/wp-content/charts/Sample Bulk Dataset - Jenny version.csv";
+        var sourceUrl = "/wp-content/chart/Sample Bulk Dataset - Jenny version.csv";
         var alsoDownload = false;
         var saveToServer = true;
 
@@ -424,7 +435,7 @@
         }
 
         var cpcUrl = SCRIPT_DIR + "cpc_descriptions.csv";
-        var tcUrl  = SCRIPT_DIR + "TC Definitions.csv";
+        var tcUrl = SCRIPT_DIR + (SCRIPT_DIR.indexOf("%20") !== -1 ? "TC%20Definitions.csv" : "TC%20Definitions.csv");
 
         var statusEl = document.getElementById("parola-extract-status");
         function setStatus(msg) {
@@ -443,26 +454,33 @@
 
         setStatus("Loading reference data and bulk dataset from " + sourceUrl + "...");
 
+        // Fetch helper with fallback for spaced filenames
+        function fetchCsvWithFallback(primaryUrl, fallbackUrl) {
+            return fetchCsvAsObjects(primaryUrl).catch(function () {
+                return fetchCsvAsObjects(fallbackUrl);
+            });
+        }
+
         Promise.all([
             fetchDataset(sourceUrl),
             fetchCsvAsObjects(cpcUrl),
-            fetchCsvAsObjects(tcUrl)
+            fetchCsvWithFallback(tcUrl, SCRIPT_DIR + "TC Definitions.csv")
         ]).then(function (results) {
             var rawRows = results[0];
             var cpcRows = results[1];
-            var tcRows  = results[2];
+            var tcRows = results[2];
 
             /* --- Build lookup maps --- */
             var cpcDescMap = {};
             cpcRows.forEach(function (row) {
-                var sym   = (row["symbol"] || row["Symbol"] || "").trim();
-                var title = (row["title"]  || row["Title"]  || row["description"] || "").trim();
+                var sym = (row["symbol"] || row["Symbol"] || "").trim();
+                var title = (row["title"] || row["Title"] || row["description"] || "").trim();
                 if (sym) cpcDescMap[sym] = title;
             });
 
             var tcDescMap = {};
             tcRows.forEach(function (row) {
-                var tc   = String(row["TC"] || row["tc"] || "").trim();
+                var tc = String(row["TC"] || row["tc"] || "").trim();
                 var desc = (row["Description"] || row["description"] || "").trim();
                 if (tc) tcDescMap[tc] = desc;
             });
@@ -473,20 +491,20 @@
                 return;
             }
 
-            var markerRow   = rawRows[0]; // Row 1: Stat A / Chart A / Industry A ...
+            var markerRow = rawRows[0]; // Row 1: Stat A / Chart A / Industry A ...
             var industryRow = rawRows[1]; // Row 2: Medical Devices / Software and AI ...
-            var headerRow   = rawRows[2]; // Row 3: column titles
+            var headerRow = rawRows[2]; // Row 3: column titles
 
             /* --- Map markers to column indices --- */
-            var statCols     = {}; // { "Stat A": colIdx, ... }
-            var chartCols    = {}; // { "Chart A": colIdx, ... }
+            var statCols = {}; // { "Stat A": colIdx, ... }
+            var chartCols = {}; // { "Chart A": colIdx, ... }
             var industryCols = {}; // { "Industry A": colIdx, ... }
 
             markerRow.forEach(function (cell, idx) {
                 var marker = (cell || "").trim();
                 if (!marker) return;
-                if (/^Stat\s+[A-Z]$/i.test(marker))     { statCols[marker]     = idx; }
-                else if (/^Chart\s+[A-Z]$/i.test(marker)) { chartCols[marker]    = idx; }
+                if (/^Stat\s+[A-Z]$/i.test(marker)) { statCols[marker] = idx; }
+                else if (/^Chart\s+[A-Z]$/i.test(marker)) { chartCols[marker] = idx; }
                 else if (/^Industry\s+[A-Z]$/i.test(marker)) { industryCols[marker] = idx; }
             });
 
@@ -499,11 +517,11 @@
             var totalRows = dataRows.length;
             var processedCount = 0;
 
-            setStatus("Found " + totalRows + " entity rows. Processing into wp-content/charts/...");
+            setStatus("Found " + totalRows + " entity rows. Processing into wp-content/chart/...");
 
             function processNext(idx) {
                 if (idx >= dataRows.length) {
-                    setStatus("Extraction complete! Successfully processed " + processedCount + " files to wp-content/charts/.");
+                    setStatus("Extraction complete! Successfully processed " + processedCount + " files to /wp-content/chart/.");
                     return;
                 }
 
@@ -527,15 +545,15 @@
                 });
                 statMarkersSorted.forEach(function (marker) {
                     var colIdx = statCols[marker];
-                    var label  = (headerRow[colIdx] || "").trim().replace(/\n/g, " ");
-                    var value  = dataRow[colIdx] !== undefined ? String(dataRow[colIdx]).trim() : "";
+                    var label = (headerRow[colIdx] || "").trim().replace(/\n/g, " ");
+                    var value = dataRow[colIdx] !== undefined ? String(dataRow[colIdx]).trim() : "";
                     if (!label && !value) return;
                     addDataBlockSheet(wb, sanitizeSheetName(marker), label, value);
                 });
 
                 /* ---- Chart A --> Frequency Table (CPC) ---- */
                 if (chartCols["Chart A"] !== undefined) {
-                    var aIdx   = chartCols["Chart A"];
+                    var aIdx = chartCols["Chart A"];
                     var aTitle = (headerRow[aIdx] || "Technology Breakdown (CPC)").trim();
                     var aPairs = parseKeyValuePairs((dataRow[aIdx] || "").trim());
                     if (aPairs.length > 0) {
@@ -545,8 +563,8 @@
 
                 /* ---- Chart B + Chart D --> Count-Percentage (Tech Center) ---- */
                 if (chartCols["Chart B"] !== undefined && chartCols["Chart D"] !== undefined) {
-                    var bIdx   = chartCols["Chart B"];
-                    var dIdx   = chartCols["Chart D"];
+                    var bIdx = chartCols["Chart B"];
+                    var dIdx = chartCols["Chart D"];
                     var bPairs = parseKeyValuePairs((dataRow[bIdx] || "").trim());
                     var dPairs = parseKeyValuePairs((dataRow[dIdx] || "").trim());
                     if (bPairs.length > 0) {
@@ -556,7 +574,7 @@
 
                 /* ---- Chart E --> Pie/Bar (Top Clients) ---- */
                 if (chartCols["Chart E"] !== undefined) {
-                    var eIdx   = chartCols["Chart E"];
+                    var eIdx = chartCols["Chart E"];
                     var eTitle = (headerRow[eIdx] || "Top Clients").trim();
                     var ePairs = parseKeyValuePairs((dataRow[eIdx] || "").trim());
                     if (ePairs.length > 0) {
@@ -567,12 +585,12 @@
                 /* ---- Industry A...E --> Firm Ranking sheet ---- */
                 if (industryMarkersSorted.length > 0) {
                     var industries = industryMarkersSorted.map(function (marker) {
-                        var startCol     = industryCols[marker];
+                        var startCol = industryCols[marker];
                         var industryName = (industryRow[startCol] || marker).trim();
                         var rankVal = "", posVal = "", patVal = "", effVal = "";
 
                         for (var sub = 0; sub < 4; sub++) {
-                            var c   = startCol + sub;
+                            var c = startCol + sub;
                             var hdr = (headerRow[c] || "").trim().toLowerCase();
                             var val = dataRow[c] !== undefined ? String(dataRow[c]).trim() : "";
                             if (hdr.indexOf("efficiency rate") !== -1 || hdr.indexOf("grant rate") !== -1) {
@@ -596,7 +614,7 @@
                     addFirmRankingSheet(wb, "Industry Ranking", entityName, industries);
                 }
 
-                /* ---- Output workbook to wp-content/charts/ (and optional download) ---- */
+                /* ---- Output workbook to /wp-content/chart/ (and optional download) ---- */
                 var filename = safeFilename(entityName);
                 var savePromise = saveToServer
                     ? saveWorkbookToServer(wb, filename)
@@ -611,7 +629,7 @@
                     })
                     .then(function (res) {
                         processedCount++;
-                        var savedMsg = res && res.path ? res.path : ("wp-content/charts/" + filename + ".xlsx");
+                        var savedMsg = res && res.path ? res.path : ("/wp-content/chart/" + filename + ".xlsx");
                         setStatus("Saved " + processedCount + " / " + totalRows + ": " + savedMsg);
                         setTimeout(function () { processNext(idx + 1); }, 100);
                     })

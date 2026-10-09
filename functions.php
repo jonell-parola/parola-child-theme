@@ -289,15 +289,11 @@ function parola_enqueue_visualization_assets() {
     );
 
     // 5. Load bulk dataset extractor (requires PapaParse + ExcelJS)
-    $extract_script_uri = file_exists( get_stylesheet_directory() . '/js/parola-extract.js' )
-        ? get_stylesheet_directory_uri() . '/js/parola-extract.js'
-        : get_stylesheet_directory_uri() . '/additional-charts/parola-extract.js';
-
     wp_enqueue_script(
         'parola-extract',
-        $extract_script_uri,
+        get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.0.1',
+        '1.0.2', // Fixed Dynamic Script Directory, Definitions Reference URLs, Source Dataset Path
         true
     );
 
@@ -306,9 +302,9 @@ function parola_enqueue_visualization_assets() {
         'parolaExtractConfig',
         array(
             'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
-            'chartsDirUrl'   => content_url( '/charts/' ),
-            'defaultCsvUrl'  => content_url( '/charts/Sample Bulk Dataset - Jenny version.csv' ),
-            'defaultXlsxUrl' => content_url( '/charts/Sample Bulk Dataset - Jenny version.xlsx' ),
+            'chartDirUrl'    => content_url( '/chart/' ),
+            'defaultCsvUrl'  => content_url( '/chart/Sample Bulk Dataset - Jenny version.csv' ),
+            'defaultXlsxUrl' => content_url( '/chart/Sample Bulk Dataset - Jenny version.xlsx' ),
             'nonce'          => wp_create_nonce( 'parola_extract_nonce' ),
         )
     );
@@ -316,7 +312,7 @@ function parola_enqueue_visualization_assets() {
 add_action( 'wp_enqueue_scripts', 'parola_enqueue_visualization_assets' );
 
 /**
- * AJAX Handler: Save Extracted Chart Excel File to wp-content/charts/
+ * AJAX Handler: Save Extracted Chart Excel File to wp-content/chart/
  * Overwrites any existing file with the same name.
  */
 function parola_ajax_save_chart_file() {
@@ -334,12 +330,12 @@ function parola_ajax_save_chart_file() {
         $raw_filename .= '.xlsx';
     }
 
-    $charts_dir = WP_CONTENT_DIR . '/charts';
-    if ( ! file_exists( $charts_dir ) ) {
-        wp_mkdir_p( $charts_dir );
+    $chart_dir = WP_CONTENT_DIR . '/chart';
+    if ( ! file_exists( $chart_dir ) ) {
+        wp_mkdir_p( $chart_dir );
     }
 
-    $file_path = $charts_dir . '/' . $raw_filename;
+    $file_path = $chart_dir . '/' . $raw_filename;
     $raw_data  = base64_decode( $_POST['filedata'] );
 
     if ( $raw_data === false ) {
@@ -355,7 +351,7 @@ function parola_ajax_save_chart_file() {
     wp_send_json_success( array(
         'message'  => 'File saved successfully.',
         'filename' => $raw_filename,
-        'path'     => '/wp-content/charts/' . $raw_filename,
+        'path'     => '/wp-content/chart/' . $raw_filename,
         'bytes'    => $bytes,
     ) );
 }
