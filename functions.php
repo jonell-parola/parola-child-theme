@@ -280,10 +280,10 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.90', // 1.0.90 - Added description column + hover popup to Frequency Table and Percentage Table
+        '1.0.91', // 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together + 1.0.90 - Added description column + hover popup to Frequency Table and Percentage Table
         // 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row + 1.0.88 - Added table headers for Count-Percentage Table + 1.0.87 - Added Data Block, Count-Percentage Table, Modified Column to just be Short and not Thick, Removed Rank Column from Firm Ranking Table
         // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60", "1.0.62", "1.0.63", "1.0.64", "1.0.65", "1.0.66", "1.0.67", "1.0.68", "1.0.70"
-		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73", "1.0.74", "1.0.75", "1.0.76", "1.0.77", "1.0.79", "1.0.80", "1.0.81", "1.0.82", "1.0.83", "1.0.84", "1.0.85", "1.0.86", "1.0.87", "1.0.88", "1.0.89"
+		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73", "1.0.74", "1.0.75", "1.0.76", "1.0.77", "1.0.79", "1.0.80", "1.0.81", "1.0.82", "1.0.83", "1.0.84", "1.0.85", "1.0.86", "1.0.87", "1.0.88", "1.0.89", "1.0.90"
 		// JONELL'S VERSION: "1.0.61"
         true
     );
@@ -293,7 +293,7 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.1.0', // 1.1.0 - Added interactive .d3-extract dashboard, dataset selector, entity multi-select, overwrite prompt & progress
+        '1.1.1', // 1.1.1 - Added post processing for each tab and data types, renamed each tab
         true
     );
 

@@ -1,6 +1,6 @@
 /**
  * Parola Bulk Dataset Extractor & Interactive Dashboard
- * Version 1.1.0
+ * Version 1.1.1
  *
  * Provides both programmatic API (window.parolaExtractBulkDataset) and an
  * interactive visual dashboard for any element matching ".d3-extract".
@@ -210,24 +210,43 @@
 
         var pctMap = {};
         pctPairs.forEach(function (p) {
-            pctMap[p.key] = p.value;
-            pctMap[stripTC(p.key)] = p.value;
+            var cleanVal = parseFloat(String(p.value).replace(/%/g, ""));
+            pctMap[p.key] = isNaN(cleanVal) ? p.value : cleanVal;
+            pctMap[stripTC(p.key)] = isNaN(cleanVal) ? p.value : cleanVal;
         });
 
-        var headRow = ws.addRow(["TC", "TC Description", "Count", "Percentage"]);
+        var headRow = ws.addRow(["TC", "Description", "Count", "Percentage"]);
         headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
 
+        var excludedTCs = ["3900", "4100", "UNLISTED"];
+
         countPairs.forEach(function (cp) {
-            var rawTC = cp.key;
-            var numTC = stripTC(rawTC);
+            var rawTC = (cp.key || "").trim();
+            var numTC = stripTC(rawTC); // Remove "TC" characters
+
+            // Exclude rows with TC value of 3900, 4100, UNLISTED
+            if (excludedTCs.indexOf(numTC.toUpperCase()) !== -1 || excludedTCs.indexOf(rawTC.toUpperCase()) !== -1) {
+                return;
+            }
+
             var desc = tcDescMap[numTC] || tcDescMap[rawTC] || "";
-            var countVal = parseFloat(cp.value) || cp.value;
-            var pctVal = pctMap[rawTC] || pctMap[numTC] || "";
-            var row = ws.addRow([rawTC, desc, countVal, pctVal]);
+
+            // Count as Number
+            var countVal = parseFloat(cp.value);
+            if (isNaN(countVal)) countVal = 0;
+
+            // Percentage as Number
+            var pctRaw = pctMap[rawTC] !== undefined ? pctMap[rawTC] : (pctMap[numTC] !== undefined ? pctMap[numTC] : "");
+            var pctVal = typeof pctRaw === "number" ? pctRaw : parseFloat(String(pctRaw).replace(/%/g, ""));
+            if (isNaN(pctVal)) pctVal = 0;
+
+            var row = ws.addRow([numTC, desc, countVal, pctVal]);
+            row.getCell(3).numFmt = '#,##0';
+            row.getCell(4).numFmt = '0.00';
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
 
@@ -247,12 +266,29 @@
             cell.border = HEADER_BORDER;
         });
         pairs.forEach(function (pair) {
-            var val = parseFloat(pair.value) || pair.value;
-            var row = ws.addRow([pair.key, val]);
+            var valStr = String(pair.value !== undefined ? pair.value : "").trim();
+            var valNum = Number(valStr);
+            // Remove any rows that cannot be turned into a number data type
+            if (isNaN(valNum) || valStr === "") {
+                return;
+            }
+            var row = ws.addRow([pair.key, valNum]);
+            row.getCell(2).numFmt = '#,##0';
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 35;
         ws.getColumn(2).width = 16;
+    }
+
+    function parsePercentageForExcel(val) {
+        if (val === undefined || val === null || String(val).trim() === "") return "";
+        var s = String(val).trim();
+        var num = parseFloat(s.replace(/%/g, ""));
+        if (isNaN(num)) return "";
+        if (s.indexOf("%") === -1 && num > 0 && num <= 1) {
+            return num;
+        }
+        return num / 100;
     }
 
     function addFirmRankingSheet(wb, sheetName, entityName, industries) {
@@ -273,12 +309,20 @@
             cell.border = HEADER_BORDER;
         });
         industries.forEach(function (ind) {
-            var row = ws.addRow([ind.industry, ind.position, ind.patents, ind.efficiencyRate]);
+            var posVal = parsePercentageForExcel(ind.position);
+            var patVal = parseInt(String(ind.patents).replace(/,/g, ""), 10);
+            if (isNaN(patVal)) patVal = parseFloat(ind.patents) || 0;
+            var effVal = parsePercentageForExcel(ind.efficiencyRate);
+
+            var row = ws.addRow([ind.industry, posVal, patVal, effVal]);
+            if (typeof posVal === "number") row.getCell(2).numFmt = '0%';
+            if (typeof patVal === "number") row.getCell(3).numFmt = '#,##0';
+            if (typeof effVal === "number") row.getCell(4).numFmt = '0%';
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 28;
         ws.getColumn(2).width = 26;
-        ws.getColumn(3).width = 18;
+        ws.getColumn(3).width = 28;
         ws.getColumn(4).width = 18;
     }
 
@@ -403,46 +447,53 @@
             var lB = b.replace(/^Stat\s+/i, "");
             return lA.localeCompare(lB);
         });
+        var statSheetNameMap = {
+            "Stat A": "Granted Patents",
+            "Stat B": "Grant efficiency",
+            "Stat C": "2025 Ranking",
+            "Stat D": "Ave Time To Grant"
+        };
         statMarkersSorted.forEach(function (marker) {
             var colIdx = statCols[marker];
             var label = (headerRow[colIdx] || "").trim().replace(/\n/g, " ");
+            if (!label) return; // If header in row 3 is empty, no need to make a sheet
             var value = entityRow[colIdx] !== undefined ? String(entityRow[colIdx]).trim() : "";
-            if (!label && !value) return;
-            addDataBlockSheet(wb, sanitizeSheetName(marker), label, value);
+            var sheetTitle = statSheetNameMap[marker] || sanitizeSheetName(marker);
+            addDataBlockSheet(wb, sheetTitle, label, value);
         });
 
-        // 2. Chart A -> Frequency Table
+        // 2. Chart A -> Frequency Table ("Technology Breakdown (CPC)")
         if (chartCols["Chart A"] !== undefined) {
             var aIdx = chartCols["Chart A"];
             var aTitle = (headerRow[aIdx] || "Technology Breakdown (CPC)").trim();
             var aPairs = parseKeyValuePairs((entityRow[aIdx] || "").trim());
             if (aPairs.length > 0) {
-                addFrequencySheet(wb, "Chart A", aTitle, aPairs, cpcDescMap);
+                addFrequencySheet(wb, "Technology Breakdown (CPC)", aTitle, aPairs, cpcDescMap);
             }
         }
 
-        // 3. Chart B + Chart D -> Count-Percentage (Tech Center)
+        // 3. Chart B + Chart D -> Count-Percentage ("Technology Center")
         if (chartCols["Chart B"] !== undefined && chartCols["Chart D"] !== undefined) {
             var bIdx = chartCols["Chart B"];
             var dIdx = chartCols["Chart D"];
             var bPairs = parseKeyValuePairs((entityRow[bIdx] || "").trim());
             var dPairs = parseKeyValuePairs((entityRow[dIdx] || "").trim());
             if (bPairs.length > 0) {
-                addCountPercentageSheet(wb, "Tech Center", bPairs, dPairs, tcDescMap);
+                addCountPercentageSheet(wb, "Technology Center", bPairs, dPairs, tcDescMap);
             }
         }
 
-        // 4. Chart E -> Pie/Bar (Top Clients)
+        // 4. Chart E -> Pie/Bar ("Top Clients")
         if (chartCols["Chart E"] !== undefined) {
             var eIdx = chartCols["Chart E"];
             var eTitle = (headerRow[eIdx] || "Top Clients").trim();
             var ePairs = parseKeyValuePairs((entityRow[eIdx] || "").trim());
             if (ePairs.length > 0) {
-                addPieBarSheet(wb, "Chart E", eTitle, ePairs);
+                addPieBarSheet(wb, "Top Clients", eTitle, ePairs);
             }
         }
 
-        // 5. Industry A-E -> Firm Ranking
+        // 5. Industry A-E -> Firm Rankings ("Firm Rankings")
         var industryMarkersSorted = Object.keys(industryCols).sort(function (a, b) {
             return industryCols[a] - industryCols[b];
         });
@@ -474,7 +525,7 @@
                     efficiencyRate: effVal
                 };
             });
-            addFirmRankingSheet(wb, "Industry Ranking", entityName, industries);
+            addFirmRankingSheet(wb, "Firm Rankings", entityName, industries);
         }
 
         return {

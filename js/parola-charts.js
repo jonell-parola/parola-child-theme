@@ -3,6 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
+ * 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together
  * 1.0.90 - Added Description & Hover Popup for Percentage & Frequency Table
  * 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row
  * 1.0.88 - Added table headers for Count-Percentage Table
@@ -1195,7 +1196,7 @@
             ].join(" ");
         }
 
-        // Helper: parse multi-row bulk dataset for firm ranking table
+        // Helper: parse multi-row bulk dataset or single CSV for firm ranking table
         function extractFirmRankingData(rawRows, fallbackData) {
             if (!rawRows || rawRows.length < 2) {
                 return {
@@ -1205,23 +1206,32 @@
                             const keys = Object.keys(row);
                             return {
                                 industry: row.Industry || row.industry || row[keys[0]] || "",
-                                rank: row.Rank || row.rank || row["Volume Rank"] || row[keys[1]] || "",
-                                position: row["Position among firms"] || row["Position among Firms"] || row.Position || row[keys[2]] || "",
-                                patents: row.Patents || row.patents || row["Granted patents"] || row[keys[3]] || "",
-                                grantRate: row["Grant rate"] || row["Efficiency Rate"] || row.grantRate || row[keys[4]] || "",
-                                yoy: row.YoY || row["Efficiency Rank"] || row.yoy || row[keys[5]] || ""
+                                position: row["Industry Position"] || row["Position among firms"] || row.Position || row[keys[1]] || "",
+                                patents: row["Number of Granted Patents"] || row["Number of Granted"] || row.Patents || row.patents || row[keys[2]] || "",
+                                grantRate: row["Efficiency Rate"] || row["Grant rate"] || row.grantRate || row[keys[3]] || ""
                             };
                         })
                     }]
                 };
             }
 
+            let entityName = "";
+            let startRow = 0;
+
+            // Check if first row is Entity Name row: e.g. ["Entity Name", "2 SPL PATENT ATTORNEYS PARTG MBB", "", ""]
+            const firstCell = String(rawRows[0][0] || '').trim().toLowerCase();
+            if (firstCell === 'entity name' || firstCell === 'entity') {
+                entityName = String(rawRows[0][1] || '').trim();
+                startRow = 1;
+            }
+
+            // Find header row starting from startRow
             let headerRowIdx = -1;
-            for (let r = 0; r < rawRows.length; r++) {
+            for (let r = startRow; r < rawRows.length; r++) {
                 const row = rawRows[r];
-                if (row.some(function (cell) {
+                if (row && row.some(function (cell) {
                     const c = String(cell || '').toLowerCase().trim();
-                    return c.includes('volume rank') || c.includes('position among firms') || c.includes('granted patents');
+                    return c.includes('industry') || c.includes('position') || c.includes('granted') || c.includes('efficiency') || c.includes('patent');
                 })) {
                     headerRowIdx = r;
                     break;
@@ -1229,74 +1239,59 @@
             }
 
             if (headerRowIdx === -1) {
-                headerRowIdx = 1;
+                headerRowIdx = startRow;
             }
 
-            const industryRow = headerRowIdx > 0 ? rawRows[headerRowIdx - 1] : [];
             const headerRow = rawRows[headerRowIdx] || [];
+            let colIndustry = -1;
+            let colPosition = -1;
+            let colPatents = -1;
+            let colGrantRate = -1;
 
-            const entities = [];
+            headerRow.forEach((cell, idx) => {
+                const h = String(cell || '').toLowerCase().trim();
+                if (h.includes('industry') && !h.includes('position')) {
+                    colIndustry = idx;
+                } else if (h.includes('position')) {
+                    colPosition = idx;
+                } else if (h.includes('granted') || h.includes('patents') || h.includes('count')) {
+                    colPatents = idx;
+                } else if (h.includes('efficiency') || h.includes('rate') || h.includes('grant')) {
+                    colGrantRate = idx;
+                }
+            });
+
+            // Default fallback column indices (0: Industry, 1: Position, 2: Patents, 3: Efficiency Rate)
+            if (colIndustry === -1) colIndustry = 0;
+            if (colPosition === -1) colPosition = 1;
+            if (colPatents === -1) colPatents = 2;
+            if (colGrantRate === -1) colGrantRate = 3;
+
+            const records = [];
             for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
                 const dataRow = rawRows[r];
                 if (!dataRow || dataRow.length === 0) continue;
+                const ind = dataRow[colIndustry] !== undefined ? String(dataRow[colIndustry]).trim() : '';
+                if (!ind) continue;
 
-                const entityName = (dataRow[0] && String(dataRow[0]).trim()) || "";
-                if (!entityName) continue;
-
-                const industries = [];
-                for (let c = 0; c < Math.max(industryRow.length, headerRow.length); c++) {
-                    const indName = industryRow[c] ? String(industryRow[c]).trim() : '';
-                    if (indName !== '') {
-                        let rankVal = '';
-                        let posVal = '';
-                        let patVal = '';
-                        let grantVal = '';
-                        let yoyVal = '';
-
-                        for (let sub = 0; sub < 5; sub++) {
-                            const colIdx = c + sub;
-                            const subHdr = headerRow[colIdx] ? String(headerRow[colIdx]).trim().toLowerCase().replace(/\s+/g, ' ') : '';
-                            const val = dataRow[colIdx] !== undefined ? String(dataRow[colIdx]).trim() : '';
-
-                            if (subHdr.includes('efficiency rate') || subHdr.includes('grant rate')) {
-                                grantVal = val;
-                            } else if (subHdr.includes('efficiency rank') || subHdr.includes('yoy')) {
-                                yoyVal = val;
-                            } else if (subHdr.includes('position')) {
-                                posVal = val;
-                            } else if (subHdr.includes('granted patents') || subHdr.includes('patents')) {
-                                patVal = val;
-                            } else if (subHdr.includes('volume rank') || subHdr.includes('rank')) {
-                                rankVal = val;
-                            }
-                        }
-
-                        industries.push({
-                            industry: indName,
-                            rank: rankVal,
-                            position: posVal,
-                            patents: patVal,
-                            grantRate: grantVal,
-                            yoy: yoyVal
-                        });
-                    }
+                // Stop if another entity or header row is encountered
+                if (ind.toLowerCase() === 'entity name' || ind.toLowerCase() === 'entity') {
+                    break;
                 }
 
-                entities.push({
-                    entityName: entityName,
-                    records: industries
-                });
-            }
-
-            if (entities.length === 0) {
-                entities.push({
-                    entityName: "Entity",
-                    records: []
+                records.push({
+                    industry: ind,
+                    position: dataRow[colPosition] !== undefined ? dataRow[colPosition] : '',
+                    patents: dataRow[colPatents] !== undefined ? dataRow[colPatents] : '',
+                    grantRate: dataRow[colGrantRate] !== undefined ? dataRow[colGrantRate] : ''
                 });
             }
 
             return {
-                entities: entities
+                entities: [{
+                    entityName: entityName || "Entity",
+                    records: records
+                }]
             };
         }
 
@@ -8702,10 +8697,9 @@
 
                 const columns = [
                     { key: "industry", label: "Industry", align: "left" },
-                    { key: "position", label: "Position among firms", align: "left" },
-                    { key: "patents", label: "Patents", align: "right" },
-                    { key: "grantRate", label: "Grant rate", align: "right" },
-                    { key: "yoy", label: "YoY", align: "center" }
+                    { key: "position", label: "Industry Position", align: "left" },
+                    { key: "patents", label: "Number of Granted Patents", align: "right" },
+                    { key: "grantRate", label: "Efficiency Rate", align: "right" }
                 ];
 
                 const cellPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
@@ -8724,25 +8718,49 @@
 
                 const tbody = table.append("tbody");
 
+                function formatPercentageValue(val) {
+                    if (val === null || val === undefined || val === '') return '';
+                    if (typeof val === 'number') {
+                        if (val > 0 && val <= 1) {
+                            return `${Math.round(val * 100)}%`;
+                        }
+                        return `${val}%`;
+                    }
+                    const str = String(val).trim();
+                    if (str.endsWith('%')) return str;
+                    const num = parseFloat(str);
+                    if (!isNaN(num)) {
+                        if (num > 0 && num <= 1 && str.includes('.')) {
+                            return `${Math.round(num * 100)}%`;
+                        }
+                        return `${str}%`;
+                    }
+                    return str;
+                }
+
                 function getPositionBadgeInfo(rawPos) {
-                    const str = String(rawPos || '').trim();
+                    const str = String(rawPos !== null && rawPos !== undefined ? rawPos : '').trim();
                     const lower = str.toLowerCase();
-                    const num = parseFloat(str.replace(/%/g, ''));
+                    let num = parseFloat(str.replace(/%/g, ''));
+                    if (!isNaN(num) && num > 0 && num <= 1 && str.includes('.')) {
+                        num = num * 100;
+                    }
+                    const displayStr = formatPercentageValue(rawPos);
 
                     if (lower.includes('10%') || lower.includes('top 10') || (!isNaN(num) && num > 0 && num <= 10)) {
                         return {
                             color: '#10b981', // green
-                            label: 'Top 10%'
+                            label: displayStr || 'Top 10%'
                         };
                     } else if (lower.includes('40%') || lower.includes('top 40') || (!isNaN(num) && num > 10 && num <= 40)) {
                         return {
                             color: '#3b82f6', // blue
-                            label: 'Top 40%'
+                            label: displayStr || 'Top 40%'
                         };
                     } else {
                         return {
                             color: '#9ca3af', // gray
-                            label: str || 'Below'
+                            label: displayStr || str || 'Below'
                         };
                     }
                 }
@@ -8767,7 +8785,7 @@
                             .style("white-space", "nowrap")
                             .text(rec.industry || "");
 
-                        // 2. Position among firms (colored dot + text)
+                        // 2. Industry Position (colored dot + text)
                         const posTd = tr.append("td")
                             .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                             .style("text-align", "left")
@@ -8792,10 +8810,14 @@
                         posWrapper.append("span")
                             .text(badgeInfo.label);
 
-                        // 3. Patents
-                        const formattedPatents = typeof rec.patents === "number"
-                            ? rec.patents.toLocaleString()
-                            : (rec.patents || "");
+                        // 3. Number of Granted Patents
+                        let formattedPatents = "";
+                        if (typeof rec.patents === "number") {
+                            formattedPatents = rec.patents.toLocaleString();
+                        } else if (rec.patents !== undefined && rec.patents !== null && rec.patents !== "") {
+                            const pNum = parseFloat(String(rec.patents).replace(/,/g, ''));
+                            formattedPatents = !isNaN(pNum) ? pNum.toLocaleString() : String(rec.patents);
+                        }
 
                         tr.append("td")
                             .style("padding", `${cellPaddingV} ${cellPaddingH}`)
@@ -8805,26 +8827,19 @@
                             .style("white-space", "nowrap")
                             .text(formattedPatents);
 
-                        // 4. Grant rate
+                        // 4. Efficiency Rate
+                        const formattedGrantRate = formatPercentageValue(rec.grantRate);
+
                         tr.append("td")
                             .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                             .style("text-align", "right")
                             .style("font-weight", "500")
                             .style("color", "#334155")
                             .style("white-space", "nowrap")
-                            .text(rec.grantRate || "");
-
-                        // 5. YoY
-                        tr.append("td")
-                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                            .style("text-align", "center")
-                            .style("font-weight", "600")
-                            .style("color", "#334155")
-                            .style("white-space", "nowrap")
-                            .text(rec.yoy !== undefined ? rec.yoy : "");
+                            .text(formattedGrantRate);
 
                         // Tooltip and hover
-                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Position:</strong> ${badgeInfo.label}<br><strong>Patents:</strong> ${formattedPatents}<br><strong>Grant rate:</strong> ${rec.grantRate}<br><strong>YoY:</strong> ${rec.yoy}`;
+                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Industry Position:</strong> ${badgeInfo.label}<br><strong>Number of Granted Patents:</strong> ${formattedPatents}<br><strong>Efficiency Rate:</strong> ${formattedGrantRate}`;
 
                         tr.on("mouseover", function () {
                             d3.select(this).style("background-color", "#f8fafc");
