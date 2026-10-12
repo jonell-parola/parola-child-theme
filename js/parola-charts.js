@@ -3,7 +3,11 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.85 - New percentage table, thicker and shorter columns, and new firm ranking table chart type.
+ * 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together
+ * 1.0.90 - Added Description & Hover Popup for Percentage & Frequency Table
+ * 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row
+ * 1.0.88 - Added table headers for Count-Percentage Table
+ * 1.0.87 - Added Data Block, Count-Percentage Table, Modified Column to just be Short and not Thick, Removed Rank Column from Firm Ranking Table
  */
 (function () {
 
@@ -78,6 +82,8 @@
         const defaultCsv =
             canvas.attr("data-csv-url") ||
             canvas.attr("data-source-file") ||
+            canvas.attr("data-csv-filename") ||
+            canvas.attr("data-csv") ||
             "";
 
         const defaultChartType =
@@ -140,10 +146,11 @@
         );
 
         const defaultThickColumns = parseBoolAttr(
+            canvas.attr("data-short-columns") ||
             canvas.attr("data-thick-columns") ||
             canvas.attr("data-compact-columns") ||
             canvas.attr("data-thick-short-columns") ||
-            canvas.attr("data-short-columns") ||
+            canvas.attr("short-columns") ||
             canvas.attr("thick-short-columns") ||
             canvas.attr("thick-columns"),
             false
@@ -299,8 +306,16 @@
                 label: "Percentage Table"
             },
             {
+                value: "count-percentage",
+                label: "Count-Percentage"
+            },
+            {
                 value: "firm-ranking-table",
                 label: "Firm Ranking Table"
+            },
+            {
+                value: "data-block",
+                label: "Data Block"
             }
         ].forEach(function (item) {
             const option = typePicker
@@ -314,7 +329,9 @@
                 item.value === normalizedDefault ||
                 (item.value === "frequency-table" && (normalizedDefault === "frequencytable" || normalizedDefault === "frequency-table")) ||
                 (item.value === "percentage-table" && (normalizedDefault === "percentagetable" || normalizedDefault === "percentage-table" || normalizedDefault === "percentage")) ||
-                (item.value === "firm-ranking-table" && (normalizedDefault === "firmrankingtable" || normalizedDefault === "firm-ranking-table" || normalizedDefault === "industry-ranking-table" || normalizedDefault === "bulk-dataset-table" || normalizedDefault === "bulk-table" || normalizedDefault === "firm-ranking"))
+                (item.value === "count-percentage" && (normalizedDefault === "countpercentage" || normalizedDefault === "count-percentage" || normalizedDefault === "count-percentage-table")) ||
+                (item.value === "firm-ranking-table" && (normalizedDefault === "firmrankingtable" || normalizedDefault === "firm-ranking-table" || normalizedDefault === "industry-ranking-table" || normalizedDefault === "bulk-dataset-table" || normalizedDefault === "bulk-table" || normalizedDefault === "firm-ranking")) ||
+                (item.value === "data-block" && (normalizedDefault === "datablock" || normalizedDefault === "data-block" || normalizedDefault === "parola-data-block" || normalizedDefault === "parola-data-blocks" || normalizedDefault === "data-blocks"))
             ) {
                 option.property("selected", true);
             }
@@ -484,7 +501,7 @@
 
         const thickShortColumnsCheckbox = createCheckboxControl(
             columnOptionsWrapper,
-            "Thick & Short Columns",
+            "Shorter Columns",
             `thick-short-columns-${uid}`,
             defaultThickColumns
         );
@@ -1179,31 +1196,42 @@
             ].join(" ");
         }
 
-        // Helper: parse multi-row bulk dataset for firm ranking table
+        // Helper: parse multi-row bulk dataset or single CSV for firm ranking table
         function extractFirmRankingData(rawRows, fallbackData) {
             if (!rawRows || rawRows.length < 2) {
                 return {
-                    entityName: "Entity",
-                    records: (fallbackData || []).map(function (row) {
-                        const keys = Object.keys(row);
-                        return {
-                            industry: row.Industry || row.industry || row[keys[0]] || "",
-                            rank: row.Rank || row.rank || row["Volume Rank"] || row[keys[1]] || "",
-                            position: row["Position among firms"] || row["Position among Firms"] || row.Position || row[keys[2]] || "",
-                            patents: row.Patents || row.patents || row["Granted patents"] || row[keys[3]] || "",
-                            grantRate: row["Grant rate"] || row["Efficiency Rate"] || row.grantRate || row[keys[4]] || "",
-                            yoy: row.YoY || row["Efficiency Rank"] || row.yoy || row[keys[5]] || ""
-                        };
-                    })
+                    entities: [{
+                        entityName: "Entity",
+                        records: (fallbackData || []).map(function (row) {
+                            const keys = Object.keys(row);
+                            return {
+                                industry: row.Industry || row.industry || row[keys[0]] || "",
+                                position: row["Industry Position"] || row["Position among firms"] || row.Position || row[keys[1]] || "",
+                                patents: row["Number of Granted Patents"] || row["Number of Granted"] || row.Patents || row.patents || row[keys[2]] || "",
+                                grantRate: row["Efficiency Rate"] || row["Grant rate"] || row.grantRate || row[keys[3]] || ""
+                            };
+                        })
+                    }]
                 };
             }
 
+            let entityName = "";
+            let startRow = 0;
+
+            // Check if first row is Entity Name row: e.g. ["Entity Name", "2 SPL PATENT ATTORNEYS PARTG MBB", "", ""]
+            const firstCell = String(rawRows[0][0] || '').trim().toLowerCase();
+            if (firstCell === 'entity name' || firstCell === 'entity') {
+                entityName = String(rawRows[0][1] || '').trim();
+                startRow = 1;
+            }
+
+            // Find header row starting from startRow
             let headerRowIdx = -1;
-            for (let r = 0; r < rawRows.length; r++) {
+            for (let r = startRow; r < rawRows.length; r++) {
                 const row = rawRows[r];
-                if (row.some(function (cell) {
+                if (row && row.some(function (cell) {
                     const c = String(cell || '').toLowerCase().trim();
-                    return c.includes('volume rank') || c.includes('position among firms') || c.includes('granted patents');
+                    return c.includes('industry') || c.includes('position') || c.includes('granted') || c.includes('efficiency') || c.includes('patent');
                 })) {
                     headerRowIdx = r;
                     break;
@@ -1211,57 +1239,161 @@
             }
 
             if (headerRowIdx === -1) {
-                headerRowIdx = 1;
+                headerRowIdx = startRow;
             }
 
-            const industryRow = headerRowIdx > 0 ? rawRows[headerRowIdx - 1] : [];
             const headerRow = rawRows[headerRowIdx] || [];
-            const dataRow = rawRows[headerRowIdx + 1] || [];
-            const entityName = (dataRow[0] && String(dataRow[0]).trim()) || "Entity";
+            let colIndustry = -1;
+            let colPosition = -1;
+            let colPatents = -1;
+            let colGrantRate = -1;
 
-            const industries = [];
-            for (let c = 0; c < Math.max(industryRow.length, headerRow.length); c++) {
-                const indName = industryRow[c] ? String(industryRow[c]).trim() : '';
-                if (indName !== '') {
-                    let rankVal = '';
-                    let posVal = '';
-                    let patVal = '';
-                    let grantVal = '';
-                    let yoyVal = '';
-
-                    for (let sub = 0; sub < 5; sub++) {
-                        const colIdx = c + sub;
-                        const subHdr = headerRow[colIdx] ? String(headerRow[colIdx]).trim().toLowerCase().replace(/\s+/g, ' ') : '';
-                        const val = dataRow[colIdx] !== undefined ? String(dataRow[colIdx]).trim() : '';
-
-                        if (subHdr.includes('efficiency rate') || subHdr.includes('grant rate')) {
-                            grantVal = val;
-                        } else if (subHdr.includes('efficiency rank') || subHdr.includes('yoy')) {
-                            yoyVal = val;
-                        } else if (subHdr.includes('position')) {
-                            posVal = val;
-                        } else if (subHdr.includes('granted patents') || subHdr.includes('patents')) {
-                            patVal = val;
-                        } else if (subHdr.includes('volume rank') || subHdr.includes('rank')) {
-                            rankVal = val;
-                        }
-                    }
-
-                    industries.push({
-                        industry: indName,
-                        rank: rankVal,
-                        position: posVal,
-                        patents: patVal,
-                        grantRate: grantVal,
-                        yoy: yoyVal
-                    });
+            headerRow.forEach((cell, idx) => {
+                const h = String(cell || '').toLowerCase().trim();
+                if (h.includes('industry') && !h.includes('position')) {
+                    colIndustry = idx;
+                } else if (h.includes('position')) {
+                    colPosition = idx;
+                } else if (h.includes('granted') || h.includes('patents') || h.includes('count')) {
+                    colPatents = idx;
+                } else if (h.includes('efficiency') || h.includes('rate') || h.includes('grant')) {
+                    colGrantRate = idx;
                 }
+            });
+
+            // Default fallback column indices (0: Industry, 1: Position, 2: Patents, 3: Efficiency Rate)
+            if (colIndustry === -1) colIndustry = 0;
+            if (colPosition === -1) colPosition = 1;
+            if (colPatents === -1) colPatents = 2;
+            if (colGrantRate === -1) colGrantRate = 3;
+
+            const records = [];
+            for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
+                const dataRow = rawRows[r];
+                if (!dataRow || dataRow.length === 0) continue;
+                const ind = dataRow[colIndustry] !== undefined ? String(dataRow[colIndustry]).trim() : '';
+                if (!ind) continue;
+
+                // Stop if another entity or header row is encountered
+                if (ind.toLowerCase() === 'entity name' || ind.toLowerCase() === 'entity') {
+                    break;
+                }
+
+                records.push({
+                    industry: ind,
+                    position: dataRow[colPosition] !== undefined ? dataRow[colPosition] : '',
+                    patents: dataRow[colPatents] !== undefined ? dataRow[colPatents] : '',
+                    grantRate: dataRow[colGrantRate] !== undefined ? dataRow[colGrantRate] : ''
+                });
             }
 
             return {
-                entityName: entityName,
-                records: industries
+                entities: [{
+                    entityName: entityName || "Entity",
+                    records: records
+                }]
             };
+        }
+
+        // Helper: parse data block items from CSV
+        function extractDataBlockItems(rawRows, fallbackData) {
+            const items = [];
+
+            if (rawRows && rawRows.length >= 2) {
+                let labelRow = null;
+                let valueRow = null;
+
+                for (let r = 0; r < rawRows.length; r++) {
+                    const firstCell = String(rawRows[r][0] || "").trim().toLowerCase();
+                    if (firstCell === "label" && !labelRow) {
+                        labelRow = rawRows[r];
+                    } else if (firstCell === "value" && !valueRow) {
+                        valueRow = rawRows[r];
+                    }
+                }
+
+                if (labelRow && valueRow) {
+                    const maxCols = Math.max(labelRow.length, valueRow.length);
+                    for (let c = 1; c < maxCols; c++) {
+                        const lbl = String(labelRow[c] !== undefined ? labelRow[c] : "").trim();
+                        const val = valueRow[c] !== undefined ? String(valueRow[c]).trim() : "";
+                        if (lbl !== "" || val !== "") {
+                            items.push({ label: lbl, value: val });
+                        }
+                    }
+                    if (items.length > 0) {
+                        return items;
+                    }
+                }
+            }
+
+            if (fallbackData && fallbackData.length > 0) {
+                const firstRow = fallbackData[0];
+                const rowKeys = Object.keys(firstRow);
+
+                const labelKey = rowKeys.find(function (k) {
+                    return k.toLowerCase() === "label";
+                });
+                const valueKey = rowKeys.find(function (k) {
+                    return k.toLowerCase() === "value";
+                });
+
+                if (labelKey && valueKey) {
+                    fallbackData.forEach(function (row) {
+                        const lbl = String(row[labelKey] !== undefined ? row[labelKey] : "").trim();
+                        const val = row[valueKey] !== undefined ? String(row[valueKey]).trim() : "";
+                        if (lbl !== "" || val !== "") {
+                            items.push({ label: lbl, value: val });
+                        }
+                    });
+                    if (items.length > 0) return items;
+                }
+
+                if (fallbackData.length === 1 && rowKeys.length > 0 && !labelKey && !valueKey) {
+                    rowKeys.forEach(function (k) {
+                        if (
+                            k.toLowerCase() !== "description" &&
+                            k.toLowerCase() !== "title" &&
+                            k.toLowerCase() !== "subtitle"
+                        ) {
+                            items.push({
+                                label: k,
+                                value: String(firstRow[k] !== undefined ? firstRow[k] : "").trim()
+                            });
+                        }
+                    });
+                    if (items.length > 0) return items;
+                }
+
+                if (rowKeys.length >= 2) {
+                    const k0 = rowKeys[0];
+                    const k1 = rowKeys[1];
+                    fallbackData.forEach(function (row) {
+                        const lbl = String(row[k0] !== undefined ? row[k0] : "").trim();
+                        const val = row[k1] !== undefined ? String(row[k1]).trim() : "";
+                        if (lbl !== "" || val !== "") {
+                            items.push({ label: lbl, value: val });
+                        }
+                    });
+                    if (items.length > 0) return items;
+                }
+            }
+
+            return items;
+        }
+
+        function formatDataBlockValue(val) {
+            if (val === null || val === undefined) return "";
+            const str = String(val).trim();
+            if (str === "") return "";
+            if (str.includes(",") || str.endsWith("%") || isNaN(Number(str))) {
+                return str;
+            }
+            const num = Number(str);
+            if (!isNaN(num)) {
+                return num.toLocaleString();
+            }
+            return str;
         }
 
         // =========================================================
@@ -1293,6 +1425,9 @@
             const activeType =
                 typePicker.property("value");
 
+            const isThickShort =
+                thickShortColumnsCheckbox.property("checked");
+
             const selectedLogo =
                 logoPicker.property("value") ||
                 defaultLogoStyle;
@@ -1311,6 +1446,13 @@
                     320,
                     containerWidth * 0.65
                 );
+
+            if (activeType === "bar" && isThickShort) {
+                chartHeight = Math.max(
+                    180,
+                    containerWidth * 0.35
+                );
+            }
 
             const activeWidth =
                 chartWidth -
@@ -1493,9 +1635,6 @@
             const showPercentage =
                 showPercentageCheckbox.property("checked");
 
-            const isThickShort =
-                thickShortColumnsCheckbox.property("checked");
-
             if (activeType === "bar") {
                 columnOptionsWrapper.style("display", "flex");
             } else {
@@ -1505,7 +1644,9 @@
             if (
                 activeType === "frequency-table" ||
                 activeType === "percentage-table" ||
-                activeType === "firm-ranking-table"
+                activeType === "count-percentage" ||
+                activeType === "firm-ranking-table" ||
+                activeType === "data-block"
             ) {
                 svgOuter.style("display", "none");
             } else {
@@ -1547,7 +1688,19 @@
 
             contentRow
                 .selectAll(
+                    `.count-percentage-container-${uid}`
+                )
+                .remove();
+
+            contentRow
+                .selectAll(
                     `.firm-ranking-table-container-${uid}`
+                )
+                .remove();
+
+            contentRow
+                .selectAll(
+                    `.data-block-container-${uid}`
                 )
                 .remove();
 
@@ -2598,8 +2751,8 @@
                     null
                 );
 
-                const columnPadding = isThickShort ? 0.12 : 0.3;
-                const columnDomainMultiplier = isThickShort ? 1.85 : 1.1;
+                const columnPadding = 0.3;
+                const columnDomainMultiplier = 1.1;
 
                 const xScale =
                     d3
@@ -2784,8 +2937,7 @@
                     .exit()
                     .remove();
 
-                const barCornerRadius =
-                    isThickShort ? 6 : 4;
+                const barCornerRadius = 4;
 
                 const mergedBarPaths =
                     barPaths
@@ -7563,6 +7715,11 @@
                     (valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
                     keys[0];
 
+                // Resolve description key for frequency table
+                const freqDescKey = keys.find(function (k) {
+                    return k.toLowerCase() === "description";
+                });
+
                 let totalVal = 0;
                 let maxVal = 0;
                 data.forEach(
@@ -7607,6 +7764,28 @@
                             "color",
                             "#333"
                         );
+
+                // Table header row
+                const freqThead = table.append("thead");
+                const freqHeaderTr = freqThead.append("tr")
+                    .style("border-bottom", "2px solid #e2e8f0")
+                    .style("background-color", "#f8fafc");
+                const freqHeadPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
+                [
+                    { label: firstColKey, align: "left" },
+                    { label: "", align: "left" },
+                    { label: secondColKey, align: "right" },
+                    { label: "description", align: "left" }
+                ].forEach(function (col) {
+                    freqHeaderTr.append("th")
+                        .style("padding", `${freqHeadPaddingV} 16px`)
+                        .style("text-align", col.align)
+                        .style("font-weight", "600")
+                        .style("color", "#475569")
+                        .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
+                        .style("white-space", "nowrap")
+                        .text(col.label);
+                });
 
                 const tbody =
                     table.append(
@@ -7837,12 +8016,23 @@
                                 displayCount
                             );
 
-                        // Tooltip and hover interaction
+                        // Column 4: Description
                         const desc =
-                            descriptionKey
-                                ? row[descriptionKey]
-                                : (currentDescriptions[firstColVal] || null);
+                            freqDescKey
+                                ? (row[freqDescKey] || "")
+                                : (currentDescriptions[firstColVal] || "");
 
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "left")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("color", "#555")
+                            .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                            .text(desc);
+
+                        // Tooltip and hover interaction
                         const tooltipContent =
                             `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displayCount}`;
 
@@ -7857,7 +8047,7 @@
                                     .html(
                                         formatTooltipContent(
                                             tooltipContent,
-                                            desc
+                                            desc || null
                                         )
                                     )
                                     .style(
@@ -7946,6 +8136,11 @@
                     (valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
                     keys[0];
 
+                // Resolve description key for percentage table
+                const pctDescKey = keys.find(function (k) {
+                    return k.toLowerCase() === "description";
+                });
+
                 const table =
                     tableWrapper
                         .append(
@@ -7975,6 +8170,28 @@
                             "color",
                             "#333"
                         );
+
+                // Table header row
+                const pctThead = table.append("thead");
+                const pctHeaderTr = pctThead.append("tr")
+                    .style("border-bottom", "2px solid #e2e8f0")
+                    .style("background-color", "#f8fafc");
+                const pctHeadPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
+                [
+                    { label: firstColKey, align: "left" },
+                    { label: "", align: "left" },
+                    { label: secondColKey, align: "right" },
+                    { label: "description", align: "left" }
+                ].forEach(function (col) {
+                    pctHeaderTr.append("th")
+                        .style("padding", `${pctHeadPaddingV} 16px`)
+                        .style("text-align", col.align)
+                        .style("font-weight", "600")
+                        .style("color", "#475569")
+                        .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
+                        .style("white-space", "nowrap")
+                        .text(col.label);
+                });
 
                 const tbody =
                     table.append(
@@ -8093,13 +8310,310 @@
                             .style("color", "#333")
                             .text(displayCount);
 
+                        // Column 4: Description
+                        const pctDesc =
+                            pctDescKey
+                                ? (row[pctDescKey] || "")
+                                : (currentDescriptions[firstColVal] || "");
+
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "left")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("color", "#555")
+                            .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                            .text(pctDesc);
+
                         // Tooltip and hover interaction
-                        const desc = descriptionKey
-                            ? row[descriptionKey]
+                        const tooltipContent =
+                            `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displayCount}`;
+
+                        tr.on("mouseover", function () {
+                            d3.select(this).style("background-color", "#f9fafb");
+                            tooltip.html(formatTooltipContent(tooltipContent, pctDesc || null)).style("visibility", "visible");
+                        })
+                            .on("mousemove", function (event) {
+                                tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
+                            })
+                            .on("mouseout", function () {
+                                d3.select(this).style("background-color", "transparent");
+                                tooltip.style("visibility", "hidden");
+                            });
+                    }
+                );
+            }
+
+            // =====================================================
+            // COUNT-PERCENTAGE TABLE
+            // =====================================================
+
+            else if (
+                activeType === "count-percentage"
+            ) {
+                svgOuter.style(
+                    "display",
+                    "none"
+                );
+
+                const tableWrapper =
+                    contentRow
+                        .append(
+                            "div"
+                        )
+                        .attr(
+                            "class",
+                            `count-percentage-container-${uid}`
+                        )
+                        .style(
+                            "width",
+                            "100%"
+                        )
+                        .style(
+                            "display",
+                            "flex"
+                        )
+                        .style(
+                            "flex-direction",
+                            "column"
+                        )
+                        .style(
+                            "font-family",
+                            activeFont
+                        )
+                        .style(
+                            "box-sizing",
+                            "border-box"
+                        );
+
+                const descKey = keys.find(function (k) {
+                    return k.toLowerCase() === "description";
+                });
+
+                const firstColKey = categoryKey;
+
+                const remainingKeys = keys.filter(function (k) {
+                    return k !== firstColKey && k !== descKey;
+                });
+
+                const secondColKey = remainingKeys.find(function (k) {
+                    return k.toLowerCase() === "patents" || k.toLowerCase() === "count" || k.toLowerCase() === "value";
+                }) || remainingKeys[0] || keys[1] || keys[0];
+
+                const thirdColKey = remainingKeys.find(function (k) {
+                    return (
+                        k !== secondColKey &&
+                        (k.toLowerCase().includes("rate") ||
+                            k.toLowerCase().includes("percent") ||
+                            k.toLowerCase().includes("efficiency"))
+                    );
+                }) || remainingKeys.find(function (k) {
+                    return k !== secondColKey;
+                }) || remainingKeys[1] || secondColKey;
+
+                const table =
+                    tableWrapper
+                        .append(
+                            "table"
+                        )
+                        .style(
+                            "width",
+                            "100%"
+                        )
+                        .style(
+                            "border-collapse",
+                            "collapse"
+                        )
+                        .style(
+                            "border",
+                            "none"
+                        )
+                        .style(
+                            "table-layout",
+                            "auto"
+                        )
+                        .style(
+                            "font-size",
+                            `${Math.max(12, Math.round(14 * fontScale))}px`
+                        )
+                        .style(
+                            "color",
+                            "#333"
+                        );
+
+                const thead = table.append("thead");
+                const headerTr = thead.append("tr")
+                    .style("border-bottom", "2px solid #e2e8f0")
+                    .style("background-color", "#f8fafc");
+
+                const headerCols = [
+                    { label: firstColKey, align: "left" },
+                    { label: secondColKey, align: "right" },
+                    { label: thirdColKey, align: "right" },
+                    { label: "", align: "left" }
+                ];
+
+                const headPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
+                const cellPaddingH = "16px";
+
+                headerCols.forEach(function (col) {
+                    headerTr.append("th")
+                        .style("padding", `${headPaddingV} ${cellPaddingH}`)
+                        .style("text-align", col.align)
+                        .style("font-weight", "600")
+                        .style("color", "#475569")
+                        .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
+                        .style("white-space", "nowrap")
+                        .text(col.label);
+                });
+
+                const tbody =
+                    table.append(
+                        "tbody"
+                    );
+
+                const rowPaddingV =
+                    `${Math.max(8, Math.round(10 * fontScale))}px`;
+                const barThickness =
+                    `${Math.max(8, Math.round(10 * fontScale))}px`;
+
+                data.forEach(
+                    function (row) {
+                        const tr =
+                            tbody
+                                .append(
+                                    "tr"
+                                )
+                                .style(
+                                    "border-bottom",
+                                    "1px solid #e5e5e5"
+                                )
+                                .style(
+                                    "transition",
+                                    "background-color 0.15s ease"
+                                );
+
+                        const firstColVal =
+                            row[firstColKey] !== undefined
+                                ? row[firstColKey]
+                                : "";
+
+                        const secondColVal =
+                            row[secondColKey] !== undefined
+                                ? row[secondColKey]
+                                : "";
+
+                        const rawThirdVal =
+                            row[thirdColKey] !== undefined
+                                ? row[thirdColKey]
+                                : "";
+
+                        let numericPercent = 0;
+                        let displayPercent = "";
+                        let fillPercent = 0;
+
+                        if (typeof rawThirdVal === "string") {
+                            const trimmed = rawThirdVal.trim();
+                            if (trimmed.endsWith("%")) {
+                                numericPercent = parseFloat(trimmed.replace(/%/g, "")) || 0;
+                                fillPercent = Math.max(0, Math.min(100, numericPercent));
+                                displayPercent = trimmed;
+                            } else {
+                                numericPercent = parseFloat(trimmed) || 0;
+                                if (numericPercent > 0 && numericPercent <= 1) {
+                                    fillPercent = numericPercent * 100;
+                                    displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                } else {
+                                    fillPercent = Math.max(0, Math.min(100, numericPercent));
+                                    displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                }
+                            }
+                        } else if (typeof rawThirdVal === "number") {
+                            numericPercent = rawThirdVal;
+                            if (numericPercent > 0 && numericPercent <= 1) {
+                                fillPercent = numericPercent * 100;
+                                displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                            } else {
+                                fillPercent = Math.max(0, Math.min(100, numericPercent));
+                                displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                            }
+                        } else {
+                            displayPercent = String(rawThirdVal);
+                        }
+
+                        const displaySecondVal = typeof secondColVal === "number"
+                            ? secondColVal.toLocaleString()
+                            : String(secondColVal !== undefined ? secondColVal : "");
+
+                        // Column 1: Technology Center
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "left")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("white-space", "nowrap")
+                            .style("font-weight", "500")
+                            .style("color", "#333")
+                            .text(firstColVal);
+
+                        // Column 2: Patents (Count)
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "right")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("white-space", "nowrap")
+                            .style("font-weight", "500")
+                            .style("color", "#333")
+                            .text(displaySecondVal);
+
+                        // Column 3: Efficiency Rate (Percentage)
+                        tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("text-align", "right")
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("white-space", "nowrap")
+                            .style("font-weight", "600")
+                            .style("color", "#333")
+                            .text(displayPercent);
+
+                        // Column 4 (To the right of third column): Percentage Bar
+                        const barTd = tr.append("td")
+                            .style("padding", `${rowPaddingV} 16px`)
+                            .style("vertical-align", "middle")
+                            .style("border", "none")
+                            .style("border-bottom", "1px solid #e5e5e5")
+                            .style("width", "100%")
+                            .style("min-width", "80px");
+
+                        const barTrack = barTd.append("div")
+                            .style("width", "100%")
+                            .style("height", barThickness)
+                            .style("background-color", "#e5e7eb")
+                            .style("border-radius", "9999px")
+                            .style("overflow", "hidden")
+                            .style("position", "relative")
+                            .style("box-sizing", "border-box");
+
+                        barTrack.append("div")
+                            .style("width", `${fillPercent}%`)
+                            .style("height", "100%")
+                            .style("background-color", "rgb(28, 167, 166)")
+                            .style("border-radius", "9999px")
+                            .style("transition", "width 0.3s ease");
+
+                        // Tooltip and hover interaction
+                        const desc = descKey
+                            ? row[descKey]
                             : (currentDescriptions[firstColVal] || null);
 
                         const tooltipContent =
-                            `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displayCount}`;
+                            `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displaySecondVal}<br><strong>${thirdColKey}:</strong> ${displayPercent}`;
 
                         tr.on("mouseover", function () {
                             d3.select(this).style("background-color", "#f9fafb");
@@ -8139,71 +8653,34 @@
                     .style("box-sizing", "border-box");
 
                 const rankingData = extractFirmRankingData(currentRawRows, data);
-                const entityName = rankingData.entityName || "Entity";
-                const records = rankingData.records || [];
+                const entities = rankingData.entities || [];
 
                 // -------------------------------------------------
-                // Row 1: Left buttons + Right Entity Name
+                // Row 1: First Row Entity Name
                 // -------------------------------------------------
-                const topRow = tableContainer
-                    .append("div")
-                    .style("display", "flex")
-                    .style("justify-content", "space-between")
-                    .style("align-items", "center")
-                    .style("flex-wrap", "wrap")
-                    .style("gap", "12px")
-                    .style("margin-bottom", "16px")
-                    .style("width", "100%");
+                const firstEntityName = (entities[0] && entities[0].entityName) || "";
 
-                const buttonGroup = topRow
-                    .append("div")
-                    .style("display", "flex")
-                    .style("align-items", "center")
-                    .style("gap", "8px")
-                    .style("flex-wrap", "wrap");
+                if (firstEntityName) {
+                    const topRow = tableContainer
+                        .append("div")
+                        .style("display", "flex")
+                        .style("justify-content", "flex-start")
+                        .style("align-items", "center")
+                        .style("margin-bottom", "14px")
+                        .style("width", "100%");
 
-                buttonGroup
-                    .append("button")
-                    .attr("type", "button")
-                    .text("Rank by filing volume")
-                    .style("background-color", "#0f172a")
-                    .style("color", "#ffffff")
-                    .style("border", "1px solid #0f172a")
-                    .style("border-radius", "6px")
-                    .style("padding", "7px 15px")
-                    .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
-                    .style("font-weight", "500")
-                    .style("font-family", activeFont)
-                    .style("cursor", "pointer")
-                    .style("outline", "none")
-                    .style("transition", "all 0.15s ease");
-
-                buttonGroup
-                    .append("button")
-                    .attr("type", "button")
-                    .text("Rank by grant date")
-                    .style("background-color", "#ffffff")
-                    .style("color", "#475569")
-                    .style("border", "1px solid #cbd5e1")
-                    .style("border-radius", "6px")
-                    .style("padding", "7px 15px")
-                    .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
-                    .style("font-weight", "500")
-                    .style("font-family", activeFont)
-                    .style("cursor", "pointer")
-                    .style("outline", "none")
-                    .style("transition", "all 0.15s ease");
-
-                topRow
-                    .append("div")
-                    .style("font-weight", "700")
-                    .style("font-size", `${Math.max(13, Math.round(16 * fontScale))}px`)
-                    .style("color", "#1e293b")
-                    .style("letter-spacing", "0.02em")
-                    .text(entityName);
+                    topRow
+                        .append("div")
+                        .attr("class", `firm-ranking-entity-name-${uid}`)
+                        .style("font-size", `${Math.max(14, Math.round(16 * fontScale))}px`)
+                        .style("font-weight", "700")
+                        .style("color", "#1e293b")
+                        .style("font-family", activeFont)
+                        .text(firstEntityName);
+                }
 
                 // -------------------------------------------------
-                // Row 2: Table (6 columns)
+                // Row 2: Table (5 columns without Rank)
                 // -------------------------------------------------
                 const table = tableContainer
                     .append("table")
@@ -8220,11 +8697,9 @@
 
                 const columns = [
                     { key: "industry", label: "Industry", align: "left" },
-                    { key: "rank", label: "Rank", align: "center" },
-                    { key: "position", label: "Position among firms", align: "left" },
-                    { key: "patents", label: "Patents", align: "right" },
-                    { key: "grantRate", label: "Grant rate", align: "right" },
-                    { key: "yoy", label: "YoY", align: "center" }
+                    { key: "position", label: "Industry Position", align: "left" },
+                    { key: "patents", label: "Number of Granted Patents", align: "right" },
+                    { key: "grantRate", label: "Efficiency Rate", align: "right" }
                 ];
 
                 const cellPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
@@ -8243,123 +8718,144 @@
 
                 const tbody = table.append("tbody");
 
+                function formatPercentageValue(val) {
+                    if (val === null || val === undefined || val === '') return '';
+                    if (typeof val === 'number') {
+                        if (val > 0 && val <= 1) {
+                            return `${Math.round(val * 100)}%`;
+                        }
+                        return `${val}%`;
+                    }
+                    const str = String(val).trim();
+                    if (str.endsWith('%')) return str;
+                    const num = parseFloat(str);
+                    if (!isNaN(num)) {
+                        if (num > 0 && num <= 1 && str.includes('.')) {
+                            return `${Math.round(num * 100)}%`;
+                        }
+                        return `${str}%`;
+                    }
+                    return str;
+                }
+
                 function getPositionBadgeInfo(rawPos) {
-                    const str = String(rawPos || '').trim();
+                    const str = String(rawPos !== null && rawPos !== undefined ? rawPos : '').trim();
                     const lower = str.toLowerCase();
-                    const num = parseFloat(str.replace(/%/g, ''));
+                    let num = parseFloat(str.replace(/%/g, ''));
+                    if (!isNaN(num) && num > 0 && num <= 1 && str.includes('.')) {
+                        num = num * 100;
+                    }
+                    const displayStr = formatPercentageValue(rawPos);
 
                     if (lower.includes('10%') || lower.includes('top 10') || (!isNaN(num) && num > 0 && num <= 10)) {
                         return {
                             color: '#10b981', // green
-                            label: 'Top 10%'
+                            label: displayStr || 'Top 10%'
                         };
                     } else if (lower.includes('40%') || lower.includes('top 40') || (!isNaN(num) && num > 10 && num <= 40)) {
                         return {
                             color: '#3b82f6', // blue
-                            label: 'Top 40%'
+                            label: displayStr || 'Top 40%'
                         };
                     } else {
                         return {
                             color: '#9ca3af', // gray
-                            label: str || 'Below'
+                            label: displayStr || str || 'Below'
                         };
                     }
                 }
 
-                records.forEach(function (rec) {
-                    const tr = tbody.append("tr")
-                        .style("border-bottom", "1px solid #f1f5f9")
-                        .style("transition", "background-color 0.15s ease");
+                function renderFirmTableRows(entityIdx) {
+                    tbody.selectAll("*").remove();
 
-                    // 1. Industry
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "left")
-                        .style("font-weight", "500")
-                        .style("color", "#1e293b")
-                        .style("white-space", "nowrap")
-                        .text(rec.industry || "");
+                    const currentEntity = entities[entityIdx] || entities[0] || { records: [] };
+                    const records = currentEntity.records || [];
 
-                    // 2. Rank
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "center")
-                        .style("font-weight", "600")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(rec.rank !== undefined ? rec.rank : "");
+                    records.forEach(function (rec) {
+                        const tr = tbody.append("tr")
+                            .style("border-bottom", "1px solid #f1f5f9")
+                            .style("transition", "background-color 0.15s ease");
 
-                    // 3. Position among firms (colored dot + text)
-                    const posTd = tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "left")
-                        .style("white-space", "nowrap");
+                        // 1. Industry
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "left")
+                            .style("font-weight", "500")
+                            .style("color", "#1e293b")
+                            .style("white-space", "nowrap")
+                            .text(rec.industry || "");
 
-                    const badgeInfo = getPositionBadgeInfo(rec.position);
-                    const posWrapper = posTd.append("span")
-                        .style("display", "inline-flex")
-                        .style("align-items", "center")
-                        .style("gap", "7px")
-                        .style("font-weight", "500")
-                        .style("color", "#334155");
+                        // 2. Industry Position (colored dot + text)
+                        const posTd = tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "left")
+                            .style("white-space", "nowrap");
 
-                    posWrapper.append("span")
-                        .style("width", "8px")
-                        .style("height", "8px")
-                        .style("border-radius", "50%")
-                        .style("background-color", badgeInfo.color)
-                        .style("display", "inline-block")
-                        .style("flex-shrink", "0");
+                        const badgeInfo = getPositionBadgeInfo(rec.position);
+                        const posWrapper = posTd.append("span")
+                            .style("display", "inline-flex")
+                            .style("align-items", "center")
+                            .style("gap", "7px")
+                            .style("font-weight", "500")
+                            .style("color", "#334155");
 
-                    posWrapper.append("span")
-                        .text(badgeInfo.label);
+                        posWrapper.append("span")
+                            .style("width", "8px")
+                            .style("height", "8px")
+                            .style("border-radius", "50%")
+                            .style("background-color", badgeInfo.color)
+                            .style("display", "inline-block")
+                            .style("flex-shrink", "0");
 
-                    // 4. Patents
-                    const formattedPatents = typeof rec.patents === "number"
-                        ? rec.patents.toLocaleString()
-                        : (rec.patents || "");
+                        posWrapper.append("span")
+                            .text(badgeInfo.label);
 
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "right")
-                        .style("font-weight", "500")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(formattedPatents);
+                        // 3. Number of Granted Patents
+                        let formattedPatents = "";
+                        if (typeof rec.patents === "number") {
+                            formattedPatents = rec.patents.toLocaleString();
+                        } else if (rec.patents !== undefined && rec.patents !== null && rec.patents !== "") {
+                            const pNum = parseFloat(String(rec.patents).replace(/,/g, ''));
+                            formattedPatents = !isNaN(pNum) ? pNum.toLocaleString() : String(rec.patents);
+                        }
 
-                    // 5. Grant rate
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "right")
-                        .style("font-weight", "500")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(rec.grantRate || "");
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "right")
+                            .style("font-weight", "500")
+                            .style("color", "#334155")
+                            .style("white-space", "nowrap")
+                            .text(formattedPatents);
 
-                    // 6. YoY
-                    tr.append("td")
-                        .style("padding", `${cellPaddingV} ${cellPaddingH}`)
-                        .style("text-align", "center")
-                        .style("font-weight", "600")
-                        .style("color", "#334155")
-                        .style("white-space", "nowrap")
-                        .text(rec.yoy !== undefined ? rec.yoy : "");
+                        // 4. Efficiency Rate
+                        const formattedGrantRate = formatPercentageValue(rec.grantRate);
 
-                    // Tooltip and hover
-                    const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Rank:</strong> ${rec.rank}<br><strong>Position:</strong> ${badgeInfo.label}<br><strong>Patents:</strong> ${formattedPatents}<br><strong>Grant rate:</strong> ${rec.grantRate}<br><strong>YoY:</strong> ${rec.yoy}`;
+                        tr.append("td")
+                            .style("padding", `${cellPaddingV} ${cellPaddingH}`)
+                            .style("text-align", "right")
+                            .style("font-weight", "500")
+                            .style("color", "#334155")
+                            .style("white-space", "nowrap")
+                            .text(formattedGrantRate);
 
-                    tr.on("mouseover", function () {
-                        d3.select(this).style("background-color", "#f8fafc");
-                        tooltip.html(formatTooltipContent(tooltipContent)).style("visibility", "visible");
-                    })
-                        .on("mousemove", function (event) {
-                            tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
+                        // Tooltip and hover
+                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Industry Position:</strong> ${badgeInfo.label}<br><strong>Number of Granted Patents:</strong> ${formattedPatents}<br><strong>Efficiency Rate:</strong> ${formattedGrantRate}`;
+
+                        tr.on("mouseover", function () {
+                            d3.select(this).style("background-color", "#f8fafc");
+                            tooltip.html(formatTooltipContent(tooltipContent)).style("visibility", "visible");
                         })
-                        .on("mouseout", function () {
-                            d3.select(this).style("background-color", "transparent");
-                            tooltip.style("visibility", "hidden");
-                        });
-                });
+                            .on("mousemove", function (event) {
+                                tooltip.style("top", `${event.pageY + 10}px`).style("left", `${event.pageX + 10}px`);
+                            })
+                            .on("mouseout", function () {
+                                d3.select(this).style("background-color", "transparent");
+                                tooltip.style("visibility", "hidden");
+                            });
+                    });
+                }
+
+                renderFirmTableRows(0);
 
                 // -------------------------------------------------
                 // Row 3: Table Legend
@@ -8398,6 +8894,70 @@
 
                     itemDiv.append("span")
                         .text(item.label);
+                });
+            }
+
+            // =====================================================
+            // DATA BLOCK
+            // =====================================================
+
+            else if (
+                activeType === "data-block"
+            ) {
+                svgOuter.style(
+                    "display",
+                    "none"
+                );
+
+                const blockContainer = contentRow
+                    .append("div")
+                    .attr("class", `data-block-container-${uid} parola-data-blocks`)
+                    .style("width", "100%")
+                    .style("display", "grid")
+                    .style("gap", "0.5px")
+                    .style("background-color", "#787a7d")
+                    .style("border", "0.5px solid #787a7d")
+                    .style("box-sizing", "border-box")
+                    .style("font-family", activeFont);
+
+                const items = extractDataBlockItems(currentRawRows, data);
+
+                const numCols = Math.max(1, Math.min(items.length, 6));
+                blockContainer.style(
+                    "grid-template-columns",
+                    `repeat(${numCols}, minmax(0, 1fr))`
+                );
+
+                items.forEach(function (item) {
+                    const block = blockContainer
+                        .append("div")
+                        .attr("class", "parola-data-block")
+                        .style("display", "flex")
+                        .style("flex-direction", "column")
+                        .style("gap", "10px")
+                        .style("min-width", "0")
+                        .style("padding", `${Math.max(12, Math.round(15 * fontScale))}px`)
+                        .style("background-color", "#ffffff")
+                        .style("box-sizing", "border-box");
+
+                    block.append("div")
+                        .attr("class", "parola-data-block__label")
+                        .style("color", "#222222")
+                        .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                        .style("font-weight", "400")
+                        .style("line-height", "1.4")
+                        .style("text-transform", "uppercase")
+                        .style("font-family", activeFont)
+                        .text(item.label);
+
+                    block.append("div")
+                        .attr("class", "parola-data-block__value")
+                        .style("color", "#222222")
+                        .style("font-size", `${Math.max(22, Math.round(28 * fontScale))}px`)
+                        .style("font-weight", "500")
+                        .style("line-height", "1.2")
+                        .style("font-family", activeFont)
+                        .text(formatDataBlockValue(item.value));
                 });
             } else {
                 svgOuter.style(
@@ -9377,12 +9937,18 @@
         // BACKEND CSV FALLBACK
         // =========================================================
 
-        const backendCsvUrl =
+        const rawBackendCsvUrl =
             canvas.attr(
                 "data-csv-url"
             ) ||
             canvas.attr(
                 "data-source-file"
+            ) ||
+            canvas.attr(
+                "data-csv-filename"
+            ) ||
+            canvas.attr(
+                "data-csv"
             ) ||
             "";
 
@@ -9390,133 +9956,188 @@
             canvas.attr(
                 "data-csv-filename"
             ) ||
+            (rawBackendCsvUrl ? rawBackendCsvUrl.substring(rawBackendCsvUrl.lastIndexOf("/") + 1) : "chart.csv") ||
             "chart.csv";
 
         function loadBackendCsv() {
             if (
                 csvHasLoaded ||
-                !backendCsvUrl
+                !rawBackendCsvUrl
             ) {
                 return;
             }
 
-            fetch(
-                backendCsvUrl,
-                {
-                    credentials:
-                        "same-origin",
-                    cache:
-                        "no-store"
-                }
-            )
-                .then(
-                    function (
-                        response
-                    ) {
-                        if (
-                            !response.ok
-                        ) {
-                            throw new Error(
-                                `CSV request failed with status ${response.status}.`
-                            );
-                        }
+            const rawFilename = (
+                backendCsvFilename ||
+                rawBackendCsvUrl.substring(rawBackendCsvUrl.lastIndexOf("/") + 1)
+            ).trim();
 
-                        return response.blob();
+            const candidateUrls = [];
+
+            // 1. Direct URL as specified on the element
+            if (rawBackendCsvUrl) {
+                candidateUrls.push(rawBackendCsvUrl);
+            }
+
+            // 2. wp-content/chart/ directory candidates
+            if (rawFilename) {
+                candidateUrls.push(`/wp-content/chart/${rawFilename}`);
+                candidateUrls.push(`wp-content/chart/${rawFilename}`);
+            }
+
+            if (
+                rawBackendCsvUrl &&
+                !rawBackendCsvUrl.startsWith("http://") &&
+                !rawBackendCsvUrl.startsWith("https://")
+            ) {
+                const cleanPath = rawBackendCsvUrl.replace(/^\/+/, "");
+                if (!cleanPath.startsWith("wp-content/chart/")) {
+                    candidateUrls.push(`/wp-content/chart/${cleanPath}`);
+                    candidateUrls.push(`wp-content/chart/${cleanPath}`);
+                }
+            }
+
+            // Remove duplicate candidate URLs
+            const uniqueUrls = candidateUrls.filter(function (url, index, self) {
+                return url && self.indexOf(url) === index;
+            });
+
+            function tryFetchCandidate(urlIndex) {
+                if (urlIndex >= uniqueUrls.length) {
+                    console.error(
+                        `Parola chart ${uid}: Backend CSV could not be loaded from candidate URLs.`,
+                        uniqueUrls
+                    );
+
+                    if (!csvHasLoaded) {
+                        displayErrorState(
+                            "Tracking metrics update pending"
+                        );
+                    }
+                    return;
+                }
+
+                const currentUrl = uniqueUrls[urlIndex];
+
+                fetch(
+                    currentUrl,
+                    {
+                        credentials:
+                            "same-origin",
+                        cache:
+                            "no-store"
                     }
                 )
-                .then(
-                    function (
-                        blob
-                    ) {
-                        if (
-                            csvHasLoaded
+                    .then(
+                        function (
+                            response
                         ) {
-                            return;
+                            if (
+                                !response.ok
+                            ) {
+                                throw new Error(
+                                    `CSV request failed with status ${response.status}.`
+                                );
+                            }
+
+                            return response.blob();
                         }
-
-                        const csvFile =
-                            new File(
-                                [
-                                    blob
-                                ],
-                                backendCsvFilename,
-                                {
-                                    type:
-                                        blob.type ||
-                                        "text/csv"
-                                }
-                            );
-
-                        if (
-                            typeof DataTransfer !==
-                            "undefined"
+                    )
+                    .then(
+                        function (
+                            blob
                         ) {
-                            const transfer =
-                                new DataTransfer();
+                            if (
+                                csvHasLoaded
+                            ) {
+                                return;
+                            }
 
-                            transfer.items.add(
+                            if (
+                                blob.type &&
+                                blob.type.includes("text/html")
+                            ) {
+                                throw new Error(
+                                    `Response from ${currentUrl} was HTML, expected CSV.`
+                                );
+                            }
+
+                            const csvFile =
+                                new File(
+                                    [
+                                        blob
+                                    ],
+                                    rawFilename || "chart.csv",
+                                    {
+                                        type:
+                                            blob.type ||
+                                            "text/csv"
+                                    }
+                                );
+
+                            if (
+                                typeof DataTransfer !==
+                                "undefined"
+                            ) {
+                                const transfer =
+                                    new DataTransfer();
+
+                                transfer.items.add(
+                                    csvFile
+                                );
+
+                                const inputNode =
+                                    fileInput.node();
+
+                                inputNode.files =
+                                    transfer.files;
+
+                                inputNode.dispatchEvent(
+                                    new Event(
+                                        "change",
+                                        {
+                                            bubbles:
+                                                true
+                                        }
+                                    )
+                                );
+
+                                return;
+                            }
+
+                            const reader =
+                                new FileReader();
+
+                            reader.onload =
+                                function (
+                                    loadEvent
+                                ) {
+                                    csvHasLoaded =
+                                        true;
+
+                                    parseCSVAndRender(
+                                        loadEvent
+                                            .target
+                                            .result
+                                    );
+                                };
+
+                            reader.readAsText(
                                 csvFile
                             );
-
-                            const inputNode =
-                                fileInput.node();
-
-                            inputNode.files =
-                                transfer.files;
-
-                            inputNode.dispatchEvent(
-                                new Event(
-                                    "change",
-                                    {
-                                        bubbles:
-                                            true
-                                    }
-                                )
-                            );
-
-                            return;
                         }
-
-                        const reader =
-                            new FileReader();
-
-                        reader.onload =
-                            function (
-                                loadEvent
-                            ) {
-                                csvHasLoaded =
-                                    true;
-
-                                parseCSVAndRender(
-                                    loadEvent
-                                        .target
-                                        .result
-                                );
-                            };
-
-                        reader.readAsText(
-                            csvFile
-                        );
-                    }
-                )
-                .catch(
-                    function (
-                        error
-                    ) {
-                        console.error(
-                            `Parola chart ${uid}: Backend CSV could not be loaded.`,
+                    )
+                    .catch(
+                        function (
                             error
-                        );
-
-                        if (
-                            !csvHasLoaded
                         ) {
-                            displayErrorState(
-                                "Tracking metrics update pending"
-                            );
+                            // Try next candidate URL (including wp-content/chart/)
+                            tryFetchCandidate(urlIndex + 1);
                         }
-                    }
-                );
+                    );
+            }
+
+            tryFetchCandidate(0);
         }
 
         window.setTimeout(
