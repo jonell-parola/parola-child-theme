@@ -293,7 +293,7 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.1.1', // 1.1.1 - Added post processing for each tab and data types, renamed each tab
+        '1.1.2', // 1.1.2 - Client Name extraction adjustment, Top 10 CPC & Client, Firm Ranking Column Renaming, UI Paste List Option
         true
     );
 
@@ -1494,3 +1494,57 @@ add_action( 'init', function() {
 	}
 
 }, 11 );
+
+
+
+/**
+ * Bricks Condition: Check If Current Law Firm Taxonomy Term Has Published Posts
+ */
+function check_law_firm_has_posts() {
+    $term = get_queried_object();
+    $has_posts = 0;
+    $post_count = 0;
+
+    if ($term instanceof WP_Term && $term->taxonomy === 'law-firm') {
+
+        $posts = get_posts([
+            'post_type'      => 'any',
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'fields'         => 'ids',
+            'tax_query'      => [
+                [
+                    'taxonomy'         => 'law-firm',
+                    'field'            => 'term_id',
+                    'terms'            => $term->term_id,
+                    'include_children' => false,
+                ],
+            ],
+        ]);
+
+        $post_count = count($posts);
+        $has_posts = !empty($posts) ? 1 : 0;
+    }
+
+    // Debug output in browser console.
+    add_action('wp_footer', function() use ($term, $post_count, $has_posts) {
+        $debug = [
+            'taxonomy'   => $term instanceof WP_Term ? $term->taxonomy : 'Not a term',
+            'term_id'    => $term instanceof WP_Term ? $term->term_id : null,
+            'term_name'  => $term instanceof WP_Term ? $term->name : null,
+            'posts_found'=> $post_count,
+            'result'     => $has_posts,
+        ];
+
+        echo '<script>console.log("Law Firm Condition:", '
+            . wp_json_encode($debug)
+            . ');</script>';
+    });
+
+    return $has_posts;
+}
+
+add_action('check_law_firm_posts', function() {
+    echo check_law_firm_has_posts();
+});
+
