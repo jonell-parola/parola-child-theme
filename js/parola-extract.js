@@ -1,6 +1,7 @@
 /**
  * Parola Bulk Dataset Extractor & Interactive Dashboard
- * Version 1.1.1
+ * Version 1.1.2
+ * Client Name extraction adjustment, Top 10 CPC & Client, Firm Ranking Column Renaming, UI Paste List Option
  *
  * Provides both programmatic API (window.parolaExtractBulkDataset) and an
  * interactive visual dashboard for any element matching ".d3-extract".
@@ -138,6 +139,50 @@
         return results;
     }
 
+    function parseTopClients(cellStr) {
+        if (!cellStr || !cellStr.trim()) return [];
+        var items = cellStr.split(";");
+        var results = [];
+        items.forEach(function (rawItem) {
+            var item = rawItem.trim();
+            if (!item) return;
+
+            // Find the parenthesis containing a valid convertible number
+            // Standard format: "Leica Instruments (Singapore) Pte Ltd. (1)" -> Name: "Leica Instruments (Singapore) Pte Ltd.", Patents: 1
+            var endMatch = item.match(/^(.*?)\s*\(\s*([\d,]+(?:\.\d+)?)\s*\)\s*$/);
+            if (endMatch) {
+                var clientName = endMatch[1].trim();
+                var countNum = parseFloat(endMatch[2].replace(/,/g, ""));
+                results.push({ key: clientName, value: isNaN(countNum) ? 0 : countNum });
+                return;
+            }
+
+            // Fallback: search all parenthesized groups from right to left for a valid number
+            var parenRegex = /\(([^)]+)\)/g;
+            var pMatch;
+            var validNumberMatches = [];
+            while ((pMatch = parenRegex.exec(item)) !== null) {
+                var cleanInner = pMatch[1].trim().replace(/,/g, "");
+                if (cleanInner !== "" && !isNaN(Number(cleanInner))) {
+                    validNumberMatches.push({
+                        start: pMatch.index,
+                        end: pMatch.index + pMatch[0].length,
+                        value: parseFloat(cleanInner)
+                    });
+                }
+            }
+
+            if (validNumberMatches.length > 0) {
+                var target = validNumberMatches[validNumberMatches.length - 1];
+                var name = (item.substring(0, target.start) + item.substring(target.end)).replace(/\s+/g, " ").trim();
+                results.push({ key: name, value: target.value });
+            } else {
+                results.push({ key: item, value: 0 });
+            }
+        });
+        return results;
+    }
+
     function stripTC(key) {
         return key.replace(/^TC/i, "").trim();
     }
@@ -193,10 +238,25 @@
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
-        pairs.forEach(function (pair) {
+
+        // Limit to top 10 entries (ties broken by source data order)
+        var topPairs = pairs.map(function (p, idx) {
+            var val = typeof p.value === "number" ? p.value : parseFloat(String(p.value).replace(/,/g, ""));
+            return { pair: p, val: isNaN(val) ? 0 : val, origIdx: idx };
+        }).sort(function (a, b) {
+            if (b.val !== a.val) return b.val - a.val;
+            return a.origIdx - b.origIdx;
+        }).map(function (item) {
+            return item.pair;
+        }).slice(0, 10);
+
+        topPairs.forEach(function (pair) {
             var desc = cpcDescMap[pair.key] || "";
-            var freq = parseFloat(pair.value) || pair.value;
-            var row = ws.addRow([pair.key, desc, freq]);
+            var freq = parseFloat(pair.value);
+            var row = ws.addRow([pair.key, desc, isNaN(freq) ? pair.value : freq]);
+            if (!isNaN(freq)) {
+                row.getCell(3).numFmt = '#,##0';
+            }
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 16;
@@ -222,7 +282,7 @@
             cell.border = HEADER_BORDER;
         });
 
-        var excludedTCs = ["3900", "4100", "UNLISTED"];
+        var excludedTCs = ["3900", "4100", "2900", "UNLISTED"];
 
         countPairs.forEach(function (cp) {
             var rawTC = (cp.key || "").trim();
@@ -265,15 +325,24 @@
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
-        pairs.forEach(function (pair) {
-            var valStr = String(pair.value !== undefined ? pair.value : "").trim();
-            var valNum = Number(valStr);
-            // Remove any rows that cannot be turned into a number data type
-            if (isNaN(valNum) || valStr === "") {
-                return;
+
+        // Limit to top 10 entries (ties broken by source data order)
+        var topPairs = pairs.map(function (p, idx) {
+            var val = typeof p.value === "number" ? p.value : parseFloat(String(p.value).replace(/,/g, ""));
+            return { pair: p, val: isNaN(val) ? 0 : val, origIdx: idx };
+        }).sort(function (a, b) {
+            if (b.val !== a.val) return b.val - a.val;
+            return a.origIdx - b.origIdx;
+        }).map(function (item) {
+            return item.pair;
+        }).slice(0, 10);
+
+        topPairs.forEach(function (pair) {
+            var valNum = typeof pair.value === "number" ? pair.value : parseFloat(String(pair.value).replace(/,/g, ""));
+            var row = ws.addRow([pair.key, isNaN(valNum) ? pair.value : valNum]);
+            if (!isNaN(valNum)) {
+                row.getCell(2).numFmt = '#,##0';
             }
-            var row = ws.addRow([pair.key, valNum]);
-            row.getCell(2).numFmt = '#,##0';
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 35;
@@ -299,9 +368,9 @@
 
         var headRow = ws.addRow([
             "Industry",
-            "Industry Position",
-            "Number of Granted Patents",
-            "Efficiency Rate"
+            "Rank",
+            "Granted Patents",
+            "3YR Grant rate"
         ]);
         headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
@@ -309,20 +378,23 @@
             cell.border = HEADER_BORDER;
         });
         industries.forEach(function (ind) {
-            var posVal = parsePercentageForExcel(ind.position);
+            var rawRank = (ind.rank !== undefined && String(ind.rank).trim() !== "") ? ind.rank : ind.position;
+            var rankNum = parseInt(String(rawRank).replace(/,/g, ""), 10);
+            var rankCellVal = !isNaN(rankNum) ? rankNum : rawRank;
+
             var patVal = parseInt(String(ind.patents).replace(/,/g, ""), 10);
             if (isNaN(patVal)) patVal = parseFloat(ind.patents) || 0;
             var effVal = parsePercentageForExcel(ind.efficiencyRate);
 
-            var row = ws.addRow([ind.industry, posVal, patVal, effVal]);
-            if (typeof posVal === "number") row.getCell(2).numFmt = '0%';
+            var row = ws.addRow([ind.industry, rankCellVal, patVal, effVal]);
+            if (typeof rankCellVal === "number") row.getCell(2).numFmt = '#,##0';
             if (typeof patVal === "number") row.getCell(3).numFmt = '#,##0';
             if (typeof effVal === "number") row.getCell(4).numFmt = '0%';
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 28;
-        ws.getColumn(2).width = 26;
-        ws.getColumn(3).width = 28;
+        ws.getColumn(2).width = 16;
+        ws.getColumn(3).width = 20;
         ws.getColumn(4).width = 18;
     }
 
@@ -487,7 +559,7 @@
         if (chartCols["Chart E"] !== undefined) {
             var eIdx = chartCols["Chart E"];
             var eTitle = (headerRow[eIdx] || "Top Clients").trim();
-            var ePairs = parseKeyValuePairs((entityRow[eIdx] || "").trim());
+            var ePairs = parseTopClients((entityRow[eIdx] || "").trim());
             if (ePairs.length > 0) {
                 addPieBarSheet(wb, "Top Clients", eTitle, ePairs);
             }
@@ -507,7 +579,7 @@
                     var c = startCol + sub;
                     var hdr = (headerRow[c] || "").trim().toLowerCase();
                     var val = entityRow[c] !== undefined ? String(entityRow[c]).trim() : "";
-                    if (hdr.indexOf("efficiency rate") !== -1 || hdr.indexOf("grant rate") !== -1) {
+                    if (hdr.indexOf("efficiency rate") !== -1 || hdr.indexOf("grant rate") !== -1 || hdr.indexOf("3yr grant rate") !== -1) {
                         effVal = val;
                     } else if (hdr.indexOf("position") !== -1) {
                         posVal = val;
@@ -590,14 +662,30 @@
             '<div id="parola-entity-section" style="margin-bottom:20px;display:none;">',
             '  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">',
             '    <label style="font-size:13px;font-weight:600;color:#334155;">2. Select Entities to Extract (<span id="parola-selected-count">0</span> of <span id="parola-total-entities-count">0</span> selected)</label>',
-            '    <div style="display:flex;gap:8px;">',
+            '    <div style="display:flex;align-items:center;gap:8px;">',
             '      <button id="parola-btn-select-all" style="background:none;border:none;color:#0ea5e9;font-size:12px;font-weight:600;cursor:pointer;padding:0;">Select All</button>',
             '      <span style="color:#cbd5e1;">•</span>',
             '      <button id="parola-btn-deselect-all" style="background:none;border:none;color:#64748b;font-size:12px;font-weight:600;cursor:pointer;padding:0;">Deselect All</button>',
             '    </div>',
             '  </div>',
-            '  <div style="position:relative;margin-bottom:8px;">',
-            '    <input id="parola-entity-search" type="text" placeholder="🔍 Search entities..." style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;outline:none;" />',
+            '  <div style="display:flex;gap:8px;margin-bottom:8px;">',
+            '    <input id="parola-entity-search" type="text" placeholder="🔍 Search entities..." style="flex:1;box-sizing:border-box;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;outline:none;" />',
+            '    <button id="parola-btn-toggle-paste" title="Paste a list of firm names to quickly select them" style="padding:8px 12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;font-weight:600;color:#334155;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;">📋 Paste List</button>',
+            '  </div>',
+            '  <div id="parola-paste-panel" style="display:none;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:12px;margin-bottom:10px;">',
+            '    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">',
+            '      <label style="font-size:12px;font-weight:600;color:#334155;">Enter or paste a list of firm names (e.g. 50+ firms, one per line or separated by semicolons):</label>',
+            '      <button id="parola-btn-close-paste" style="background:none;border:none;color:#64748b;font-size:16px;cursor:pointer;line-height:1;padding:0 4px;" title="Close paste box">&times;</button>',
+            '    </div>',
+            '    <textarea id="parola-paste-input" rows="4" placeholder="Paste list of firm names here...&#10;Intel Corporation&#10;Knobbe Martens&#10;Leica Instruments..." style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;font-family:inherit;line-height:1.4;outline:none;resize:vertical;background:#ffffff;"></textarea>',
+            '    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px;">',
+            '      <div style="font-size:11px;color:#64748b;">Leading numbers, bullets, and whitespace are automatically cleaned.</div>',
+            '      <div style="display:flex;gap:8px;">',
+            '        <button id="parola-btn-clear-paste" style="padding:6px 12px;background:#ffffff;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;font-weight:600;color:#64748b;cursor:pointer;">Clear</button>',
+            '        <button id="parola-btn-submit-paste" style="padding:6px 16px;background:rgb(28, 167, 166);border:none;border-radius:6px;font-size:12px;font-weight:600;color:#ffffff;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.08);">Match &amp; Select</button>',
+            '      </div>',
+            '    </div>',
+            '    <div id="parola-paste-summary" style="display:none;margin-top:10px;padding:10px 12px;border-radius:6px;font-size:12px;line-height:1.4;"></div>',
             '  </div>',
             '  <div id="parola-entity-list-container" style="max-height:220px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;background:#f8fafc;">',
             '    <!-- Entity Checkboxes inserted dynamically -->',
@@ -656,6 +744,13 @@
         var entitySectionEl = container.querySelector("#parola-entity-section");
         var entityListContainer = container.querySelector("#parola-entity-list-container");
         var searchInput = container.querySelector("#parola-entity-search");
+        var btnTogglePaste = container.querySelector("#parola-btn-toggle-paste");
+        var pastePanel = container.querySelector("#parola-paste-panel");
+        var btnClosePaste = container.querySelector("#parola-btn-close-paste");
+        var pasteInput = container.querySelector("#parola-paste-input");
+        var btnClearPaste = container.querySelector("#parola-btn-clear-paste");
+        var btnSubmitPaste = container.querySelector("#parola-btn-submit-paste");
+        var pasteSummary = container.querySelector("#parola-paste-summary");
         var btnSelectAll = container.querySelector("#parola-btn-select-all");
         var btnDeselectAll = container.querySelector("#parola-btn-deselect-all");
         var selectedCountEl = container.querySelector("#parola-selected-count");
@@ -772,6 +867,17 @@
                 entitySectionEl.style.display = "none";
                 updateExtractButtonState();
                 return;
+            }
+
+            if (pasteSummary) {
+                pasteSummary.style.display = "none";
+                pasteSummary.innerHTML = "";
+            }
+            if (pasteInput) {
+                pasteInput.value = "";
+            }
+            if (pastePanel) {
+                pastePanel.style.display = "none";
             }
 
             setStatusBadge("Loading Dataset...", "#d97706", "#fef3c7");
@@ -910,6 +1016,183 @@
         // Search Input Filter
         searchInput.oninput = function () {
             renderEntityList();
+        };
+
+        // ------------------------------------------------------------------
+        // Paste Firm List: Parsing, Matching & Actions
+        // ------------------------------------------------------------------
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function cleanFirmName(name) {
+            return String(name || "")
+                .replace(/^(\d+[\.\)]\s*|[\*\-\•]\s*)/, "")
+                .replace(/^["']|["']$/g, "")
+                .trim();
+        }
+
+        function parsePastedFirmList(text) {
+            if (!text || !text.trim()) return [];
+            var lines = text.split(/[\r\n]+/);
+            var firms = [];
+            lines.forEach(function (line) {
+                var trimmed = line.trim();
+                if (!trimmed) return;
+                if (trimmed.indexOf(";") !== -1) {
+                    trimmed.split(";").forEach(function (part) {
+                        var p = cleanFirmName(part);
+                        if (p) firms.push(p);
+                    });
+                } else {
+                    var p = cleanFirmName(trimmed);
+                    if (p) firms.push(p);
+                }
+            });
+            return firms;
+        }
+
+        function findMatchingEntity(query, entities) {
+            if (!query) return null;
+            var qNorm = query.trim().toLowerCase().replace(/\s+/g, " ");
+            var qClean = qNorm.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, "");
+
+            // 1. Exact match (case-insensitive)
+            for (var i = 0; i < entities.length; i++) {
+                var e = entities[i];
+                var eNorm = e.name.trim().toLowerCase().replace(/\s+/g, " ");
+                if (eNorm === qNorm) return e;
+            }
+
+            // 2. Clean match without leading/trailing non-alphanumeric (e.g. handles _ARMSTRONG vs ARMSTRONG)
+            for (var i = 0; i < entities.length; i++) {
+                var e = entities[i];
+                var eNorm = e.name.trim().toLowerCase().replace(/\s+/g, " ");
+                var eClean = eNorm.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, "");
+                if (eClean && qClean && eClean === qClean) return e;
+            }
+
+            // 3. Match without punctuation / special characters
+            var qAlphaNum = qNorm.replace(/[^a-z0-9]/g, "");
+            if (qAlphaNum.length >= 3) {
+                for (var i = 0; i < entities.length; i++) {
+                    var e = entities[i];
+                    var eAlphaNum = e.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                    if (eAlphaNum === qAlphaNum) return e;
+                }
+            }
+
+            // 4. Word boundary / unique partial match
+            var partials = [];
+            for (var i = 0; i < entities.length; i++) {
+                var e = entities[i];
+                var eNorm = e.name.trim().toLowerCase().replace(/\s+/g, " ");
+                if (eNorm.indexOf(qNorm) !== -1 || qNorm.indexOf(eNorm) !== -1) {
+                    partials.push(e);
+                }
+            }
+            if (partials.length === 1) {
+                return partials[0];
+            }
+
+            return null;
+        }
+
+        btnTogglePaste.onclick = function () {
+            if (pastePanel.style.display === "none") {
+                pastePanel.style.display = "block";
+                pasteInput.focus();
+            } else {
+                pastePanel.style.display = "none";
+            }
+        };
+
+        btnClosePaste.onclick = function () {
+            pastePanel.style.display = "none";
+        };
+
+        btnClearPaste.onclick = function () {
+            pasteInput.value = "";
+            pasteSummary.style.display = "none";
+            pasteSummary.innerHTML = "";
+        };
+
+        btnSubmitPaste.onclick = function () {
+            var rawText = (pasteInput.value || "").trim();
+            if (!rawText) {
+                pasteSummary.style.display = "block";
+                pasteSummary.style.background = "#fee2e2";
+                pasteSummary.style.border = "1px solid #fca5a5";
+                pasteSummary.style.color = "#991b1b";
+                pasteSummary.innerHTML = "⚠️ Please enter or paste at least one firm name.";
+                return;
+            }
+
+            var queries = parsePastedFirmList(rawText);
+            if (queries.length === 0) {
+                pasteSummary.style.display = "block";
+                pasteSummary.style.background = "#fee2e2";
+                pasteSummary.style.border = "1px solid #fca5a5";
+                pasteSummary.style.color = "#991b1b";
+                pasteSummary.innerHTML = "⚠️ No valid firm names found.";
+                return;
+            }
+
+            var matched = [];
+            var unmatched = [];
+            var matchedIndices = new Set();
+
+            queries.forEach(function (q) {
+                var match = findMatchingEntity(q, availableEntities);
+                if (match) {
+                    matched.push({ query: q, entity: match });
+                    matchedIndices.add(match.index);
+                } else {
+                    unmatched.push(q);
+                }
+            });
+
+            // Select only the matched entities
+            selectedEntityIndices.clear();
+            matchedIndices.forEach(function (idx) {
+                selectedEntityIndices.add(idx);
+            });
+
+            renderEntityList();
+            updateSelectedCount();
+            updateExtractButtonState();
+
+            // Display search results summary
+            var total = queries.length;
+            var foundCount = matched.length;
+            var mismatchCount = unmatched.length;
+
+            pasteSummary.style.display = "block";
+
+            if (mismatchCount === 0) {
+                pasteSummary.style.background = "#dcfce7";
+                pasteSummary.style.border = "1px solid #86efac";
+                pasteSummary.style.color = "#15803d";
+                pasteSummary.innerHTML = "✓ <strong>" + foundCount + "/" + total + " firms found</strong>. All firms successfully matched and selected.";
+            } else {
+                pasteSummary.style.background = "#fef3c7";
+                pasteSummary.style.border = "1px solid #fcd34d";
+                pasteSummary.style.color = "#92400e";
+
+                var mismatchLabel = mismatchCount === 1 ? "1 mismatch" : (mismatchCount + " mismatches");
+                var unmatchedHtml = unmatched.map(function (u) {
+                    return "<li><code>" + escapeHtml(u) + "</code></li>";
+                }).join("");
+
+                pasteSummary.innerHTML = "<strong>" + foundCount + "/" + total + " firms found; " + mismatchLabel + "</strong>" +
+                    '<div style="margin-top:6px;font-size:12px;font-weight:600;">Unmatched firm' + (mismatchCount === 1 ? "" : "s") + ':</div>' +
+                    '<ul style="margin:4px 0 0 18px;padding:0;max-height:120px;overflow-y:auto;">' + unmatchedHtml + '</ul>';
+            }
         };
 
         // Select All / Deselect All

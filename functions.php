@@ -293,7 +293,7 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.1.1', // 1.1.1 - Added post processing for each tab and data types, renamed each tab
+        '1.1.2', // 1.1.2 - Client Name extraction adjustment, Top 10 CPC & Client, Firm Ranking Column Renaming, UI Paste List Option
         true
     );
 
