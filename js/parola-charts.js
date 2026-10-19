@@ -158,6 +158,38 @@
             false
         );
 
+        const defaultHeadersTc = parseBoolAttr(
+            canvas.attr("data-headers-tc") ||
+            canvas.attr("headers-tc") ||
+            canvas.attr("data-count-percentage-tc") ||
+            canvas.attr("count-percentage-tc"),
+            false
+        );
+
+        const defaultHeadersCpc = parseBoolAttr(
+            canvas.attr("data-headers-cpc") ||
+            canvas.attr("headers-cpc") ||
+            canvas.attr("data-count-percentage-cpc") ||
+            canvas.attr("count-percentage-cpc"),
+            false
+        );
+
+        const countPercentageHeaderPreset = (
+            canvas.attr("data-count-percentage-headers") ||
+            canvas.attr("count-percentage-headers") ||
+            ""
+        ).toLowerCase().trim();
+
+        let initialHeadersTc = defaultHeadersTc;
+        let initialHeadersCpc = defaultHeadersCpc;
+        if (countPercentageHeaderPreset === "tc" || countPercentageHeaderPreset === "tech-center" || countPercentageHeaderPreset === "tech center") {
+            initialHeadersTc = true;
+            initialHeadersCpc = false;
+        } else if (countPercentageHeaderPreset === "cpc") {
+            initialHeadersCpc = true;
+            initialHeadersTc = false;
+        }
+
         const activeFont = "Inter";
 
         // Tables (Frequency / Percentage) do not show a visible Description
@@ -511,6 +543,33 @@
             "Shorter Columns",
             `thick-short-columns-${uid}`,
             defaultThickColumns
+        );
+
+        const countPercentageOptionsWrapper = controls
+            .append("div")
+            .attr("id", `count-percentage-options-wrapper-${uid}`)
+            .style("display", "flex")
+            .style("flex-direction", "column")
+            .style("gap", "8px");
+
+        countPercentageOptionsWrapper
+            .append("label")
+            .text("Count-Percentage Table Options:")
+            .style("font-weight", "bold")
+            .style("color", "#444");
+
+        const headersTcCheckbox = createCheckboxControl(
+            countPercentageOptionsWrapper,
+            "Headers: Tech Center, Granted Patents, 3YR Grant rate",
+            `headers-tc-${uid}`,
+            initialHeadersTc
+        );
+
+        const headersCpcCheckbox = createCheckboxControl(
+            countPercentageOptionsWrapper,
+            "Headers: CPC, Granted Patents, 3YR Grant rate",
+            `headers-cpc-${uid}`,
+            initialHeadersCpc
         );
 
         // Locate the JavaScript asset directory for logo files.
@@ -1722,6 +1781,12 @@
                 columnOptionsWrapper.style("display", "flex");
             } else {
                 columnOptionsWrapper.style("display", "none");
+            }
+
+            if (activeType === "count-percentage") {
+                countPercentageOptionsWrapper.style("display", "flex");
+            } else {
+                countPercentageOptionsWrapper.style("display", "none");
             }
 
             if (
@@ -8540,10 +8605,27 @@
                     .style("border-bottom", "2px solid #e2e8f0")
                     .style("background-color", "#f8fafc");
 
+                const useTcHeaders = headersTcCheckbox.property("checked");
+                const useCpcHeaders = headersCpcCheckbox.property("checked");
+
+                let displayFirstColHeader = firstColKey;
+                let displaySecondColHeader = secondColKey;
+                let displayThirdColHeader = thirdColKey;
+
+                if (useTcHeaders) {
+                    displayFirstColHeader = "Tech Center";
+                    displaySecondColHeader = "Granted Patents";
+                    displayThirdColHeader = "3YR Grant rate";
+                } else if (useCpcHeaders) {
+                    displayFirstColHeader = "CPC";
+                    displaySecondColHeader = "Granted Patents";
+                    displayThirdColHeader = "3YR Grant rate";
+                }
+
                 const headerCols = [
-                    { label: firstColKey, align: "left" },
-                    { label: secondColKey, align: "right" },
-                    { label: thirdColKey, align: "right" },
+                    { label: displayFirstColHeader, align: "left" },
+                    { label: displaySecondColHeader, align: "right" },
+                    { label: displayThirdColHeader, align: "right" },
                     { label: "", align: "left" }
                 ];
 
@@ -8706,7 +8788,7 @@
                             : (currentDescriptions[firstColVal] || null);
 
                         const tooltipContent =
-                            `<strong>${firstColKey}:</strong> ${firstColVal}<br><strong>${secondColKey}:</strong> ${displaySecondVal}<br><strong>${thirdColKey}:</strong> ${displayPercent}`;
+                            `<strong>${displayFirstColHeader}:</strong> ${firstColVal}<br><strong>${displaySecondColHeader}:</strong> ${displaySecondVal}<br><strong>${displayThirdColHeader}:</strong> ${displayPercent}`;
 
                         tr.on("mouseover", function () {
                             d3.select(this).style("background-color", "#f9fafb");
@@ -9315,6 +9397,40 @@
         thickShortColumnsCheckbox.on(
             "change",
             function () {
+                if (
+                    currentData.length >
+                    0
+                ) {
+                    renderChart(
+                        currentData
+                    );
+                }
+            }
+        );
+
+        headersTcCheckbox.on(
+            "change",
+            function () {
+                if (headersTcCheckbox.property("checked")) {
+                    headersCpcCheckbox.property("checked", false);
+                }
+                if (
+                    currentData.length >
+                    0
+                ) {
+                    renderChart(
+                        currentData
+                    );
+                }
+            }
+        );
+
+        headersCpcCheckbox.on(
+            "change",
+            function () {
+                if (headersCpcCheckbox.property("checked")) {
+                    headersTcCheckbox.property("checked", false);
+                }
                 if (
                     currentData.length >
                     0

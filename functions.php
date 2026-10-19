@@ -295,7 +295,7 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.1.2', // 1.1.2 - Client Name extraction adjustment, Top 10 CPC & Client, Firm Ranking Column Renaming, UI Paste List Option
+        '1.1.3', // 1.1.3 - Turned Stat A-D Extracted Tab names dynamic to column header at row 3 of source data
         true
     );
 
