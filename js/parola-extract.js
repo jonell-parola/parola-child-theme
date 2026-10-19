@@ -1,8 +1,8 @@
 /**
  * Parola Bulk Dataset Extractor & Interactive Dashboard
- * Version 1.1.2
- * Client Name extraction adjustment, Top 10 CPC & Client, Firm Ranking Column Renaming, UI Paste List Option
- *
+ * Version 1.1.3
+ * Turned Stat A-D Extracted Tab names dynamic to column header at row 3 of source data
+ * 
  * Provides both programmatic API (window.parolaExtractBulkDataset) and an
  * interactive visual dashboard for any element matching ".d3-extract".
  *
@@ -195,10 +195,28 @@
     }
 
     function sanitizeSheetName(name) {
-        return String(name)
+        return String(name || "")
             .replace(/[\/\\?*\[\]:]/g, "")
+            .replace(/^'+|'+$/g, "")
             .substring(0, 31)
             .trim();
+    }
+
+    function getUniqueSheetName(wb, name, fallback) {
+        var sanitized = sanitizeSheetName(name) || sanitizeSheetName(fallback) || "Sheet";
+        if (!wb.getWorksheet(sanitized)) {
+            return sanitized;
+        }
+        var counter = 2;
+        while (true) {
+            var suffix = " " + counter;
+            var baseLen = Math.max(1, 31 - suffix.length);
+            var candidate = sanitizeSheetName(sanitized.substring(0, baseLen)) + suffix;
+            if (!wb.getWorksheet(candidate)) {
+                return candidate;
+            }
+            counter++;
+        }
     }
 
     /* ------------------------------------------------------------------
@@ -513,24 +531,18 @@
         wb.creator = "Parola Extract";
         wb.created = new Date();
 
-        // 1. Stat A-F -> Data Block sheets
+        // 1. Stat A-F -> Data Block sheets (tabs named after source data column header)
         var statMarkersSorted = Object.keys(statCols).sort(function (a, b) {
             var lA = a.replace(/^Stat\s+/i, "");
             var lB = b.replace(/^Stat\s+/i, "");
             return lA.localeCompare(lB);
         });
-        var statSheetNameMap = {
-            "Stat A": "Granted Patents",
-            "Stat B": "Grant efficiency",
-            "Stat C": "2025 Ranking",
-            "Stat D": "Ave Time To Grant"
-        };
         statMarkersSorted.forEach(function (marker) {
             var colIdx = statCols[marker];
-            var label = (headerRow[colIdx] || "").trim().replace(/\n/g, " ");
+            var label = (headerRow[colIdx] || "").trim().replace(/\r?\n/g, " ");
             if (!label) return; // If header in row 3 is empty, no need to make a sheet
             var value = entityRow[colIdx] !== undefined ? String(entityRow[colIdx]).trim() : "";
-            var sheetTitle = statSheetNameMap[marker] || sanitizeSheetName(marker);
+            var sheetTitle = getUniqueSheetName(wb, label, marker);
             addDataBlockSheet(wb, sheetTitle, label, value);
         });
 
