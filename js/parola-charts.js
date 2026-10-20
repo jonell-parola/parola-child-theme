@@ -3,7 +3,8 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
- * 1.0.92.1 - Count-Percentage Table - Added header presets toggle (Tech Center vs CPC)
+ * 1.0.93 - Firm Ranking Table - Info icon + hover tooltip beside "Industry Position" header ("Rank based on volume of granted patents")
+ * 1.0.92 - Frequency & Percentage Tables - Description column hidden (description still shows in hover tooltip). Toggle: showTableDescriptionColumn
  * 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together
  * 1.0.90 - Added Description & Hover Popup for Percentage & Frequency Table
  * 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row
@@ -190,6 +191,11 @@
         }
 
         const activeFont = "Inter";
+
+        // Tables (Frequency / Percentage) do not show a visible Description
+        // column. Descriptions are still read from the CSV and shown in the
+        // hover tooltip. Set to true to bring the column back.
+        const showTableDescriptionColumn = false;
 
         canvas
             .style("position", "relative")
@@ -638,6 +644,82 @@
             }
 
             return html;
+        }
+
+        // ---------------------------------------------------------
+        // INFO ICON + TOOLTIP (used beside table headers)
+        // Uses the site's Ionicons "information-circle" icon (loaded by
+        // Bricks). If the Ionicons stylesheet isn't on the page, an inline
+        // SVG of the same icon is drawn instead so it never shows blank.
+        // ---------------------------------------------------------
+
+        const INFO_ICON_FALLBACK_SVG =
+            '<svg viewBox="0 0 512 512" width="1em" height="1em" fill="currentColor" aria-hidden="true" focusable="false" style="display:block;">' +
+            '<path d="M256 48C141.8 48 48 141.8 48 256s93.8 208 208 208 208-93.8 208-208S370.2 48 256 48zm21 312h-42V235h42v125zm0-166h-42v-42h42v42z"></path>' +
+            '</svg>';
+
+        function appendInfoIcon(parent, infoText, sizePx) {
+            const idleColor = "#94a3b8";
+            const activeColor = "#475569";
+
+            const icon = parent
+                .append("i")
+                .attr("class", "ion-md-information-circle parola-info-icon")
+                .attr("tabindex", "0")
+                .attr("role", "img")
+                .attr("aria-label", infoText)
+                .style("display", "inline-block")
+                .style("vertical-align", "middle")
+                .style("position", "relative")
+                .style("top", "-1px")
+                .style("margin-left", "5px")
+                .style("font-size", `${sizePx}px`)
+                .style("line-height", "1")
+                .style("font-style", "normal")
+                .style("font-weight", "normal")
+                .style("color", idleColor)
+                .style("cursor", "help");
+
+            const iconNode = icon.node();
+
+            // Ionicons draws the glyph via ::before. No content = stylesheet missing.
+            const glyph = window.getComputedStyle(iconNode, "::before").content;
+            if (!glyph || glyph === "none" || glyph === "normal") {
+                iconNode.innerHTML = INFO_ICON_FALLBACK_SVG;
+            }
+
+            function show(top, left) {
+                icon.style("color", activeColor);
+                tooltip
+                    .text(infoText)
+                    .style("top", `${top}px`)
+                    .style("left", `${left}px`)
+                    .style("visibility", "visible");
+            }
+
+            function hide() {
+                icon.style("color", idleColor);
+                tooltip.style("visibility", "hidden");
+            }
+
+            icon
+                .on("mouseenter", function (event) {
+                    show(event.pageY + 10, event.pageX + 10);
+                })
+                .on("mousemove", function (event) {
+                    tooltip
+                        .style("top", `${event.pageY + 10}px`)
+                        .style("left", `${event.pageX + 10}px`);
+                })
+                .on("mouseleave", hide)
+                // Keyboard focus and taps on touch screens.
+                .on("focus", function () {
+                    const rect = iconNode.getBoundingClientRect();
+                    show(rect.bottom + window.scrollY + 6, rect.left + window.scrollX);
+                })
+                .on("blur", hide);
+
+            return icon;
         }
 
         const chartWrapperContainer = canvas
@@ -7841,8 +7923,10 @@
                     { label: firstColKey, align: "left" },
                     { label: "", align: "left" },
                     { label: secondColKey, align: "right" },
-                    { label: "description", align: "left" }
-                ].forEach(function (col) {
+                    { label: "description", align: "left", isDescription: true }
+                ].filter(function (col) {
+                    return showTableDescriptionColumn || !col.isDescription;
+                }).forEach(function (col) {
                     freqHeaderTr.append("th")
                         .style("padding", `${freqHeadPaddingV} 16px`)
                         .style("text-align", col.align)
@@ -8082,21 +8166,24 @@
                                 displayCount
                             );
 
-                        // Column 4: Description
+                        // Description: always resolved because the tooltip below uses it.
                         const desc =
                             freqDescKey
                                 ? (row[freqDescKey] || "")
                                 : (currentDescriptions[firstColVal] || "");
 
-                        tr.append("td")
-                            .style("padding", `${rowPaddingV} 16px`)
-                            .style("text-align", "left")
-                            .style("vertical-align", "middle")
-                            .style("border", "none")
-                            .style("border-bottom", "1px solid #e5e5e5")
-                            .style("color", "#555")
-                            .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
-                            .text(desc);
+                        // Column 4: Description (only drawn when the switch is on)
+                        if (showTableDescriptionColumn) {
+                            tr.append("td")
+                                .style("padding", `${rowPaddingV} 16px`)
+                                .style("text-align", "left")
+                                .style("vertical-align", "middle")
+                                .style("border", "none")
+                                .style("border-bottom", "1px solid #e5e5e5")
+                                .style("color", "#555")
+                                .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                                .text(desc);
+                        }
 
                         // Tooltip and hover interaction
                         const tooltipContent =
@@ -8247,8 +8334,10 @@
                     { label: firstColKey, align: "left" },
                     { label: "", align: "left" },
                     { label: secondColKey, align: "right" },
-                    { label: "description", align: "left" }
-                ].forEach(function (col) {
+                    { label: "description", align: "left", isDescription: true }
+                ].filter(function (col) {
+                    return showTableDescriptionColumn || !col.isDescription;
+                }).forEach(function (col) {
                     pctHeaderTr.append("th")
                         .style("padding", `${pctHeadPaddingV} 16px`)
                         .style("text-align", col.align)
@@ -8376,21 +8465,24 @@
                             .style("color", "#333")
                             .text(displayCount);
 
-                        // Column 4: Description
+                        // Description: always resolved because the tooltip below uses it.
                         const pctDesc =
                             pctDescKey
                                 ? (row[pctDescKey] || "")
                                 : (currentDescriptions[firstColVal] || "");
 
-                        tr.append("td")
-                            .style("padding", `${rowPaddingV} 16px`)
-                            .style("text-align", "left")
-                            .style("vertical-align", "middle")
-                            .style("border", "none")
-                            .style("border-bottom", "1px solid #e5e5e5")
-                            .style("color", "#555")
-                            .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
-                            .text(pctDesc);
+                        // Column 4: Description (only drawn when the switch is on)
+                        if (showTableDescriptionColumn) {
+                            tr.append("td")
+                                .style("padding", `${rowPaddingV} 16px`)
+                                .style("text-align", "left")
+                                .style("vertical-align", "middle")
+                                .style("border", "none")
+                                .style("border-bottom", "1px solid #e5e5e5")
+                                .style("color", "#555")
+                                .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                                .text(pctDesc);
+                        }
 
                         // Tooltip and hover interaction
                         const tooltipContent =
@@ -8780,7 +8872,7 @@
 
                 const columns = [
                     { key: "industry", label: "Industry", align: "left" },
-                    { key: "position", label: "Industry Position", align: "left" },
+                    { key: "position", label: "Industry Position", align: "left", info: "Rank based on volume of granted patents" },
                     { key: "patents", label: "Number of Granted Patents", align: "right" },
                     { key: "grantRate", label: "Efficiency Rate", align: "right" }
                 ];
@@ -8789,7 +8881,7 @@
                 const cellPaddingH = `${Math.max(10, Math.round(14 * fontScale))}px`;
 
                 columns.forEach(function (col) {
-                    headerTr.append("th")
+                    const th = headerTr.append("th")
                         .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                         .style("text-align", col.align)
                         .style("font-weight", "600")
@@ -8797,6 +8889,11 @@
                         .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
                         .style("white-space", "nowrap")
                         .text(col.label);
+
+                    // Optional info icon with hover tooltip (add `info` to any column above).
+                    if (col.info) {
+                        appendInfoIcon(th, col.info, Math.max(13, Math.round(15 * fontScale)));
+                    }
                 });
 
                 const tbody = table.append("tbody");

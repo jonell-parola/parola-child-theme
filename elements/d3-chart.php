@@ -2,7 +2,7 @@
 /**
  * Bricks custom element: Parola D3 Chart
  *
- * Compatible with parola-charts.js v1.0.83
+ * Compatible with parola-charts.js v1.0.85
  *
  * Place this file at:
  * /wp-content/themes/YOUR-CHILD-THEME/elements/d3-chart.php
@@ -143,6 +143,16 @@ class Parola_Element_D3_Chart extends \Bricks\Element {
 			'rerender' => true,
 		);
 
+		$this->controls['showPercentage'] = array(
+			'tab'      => 'content',
+			'label'    => esc_html__( 'Show Percentage', 'bricks' ),
+			'type'     => 'checkbox',
+			'inline'   => true,
+			'small'    => true,
+			'default'  => false,
+			'rerender' => true,
+		);
+
 		// =========================================================
 		// STACKED CHART OPTIONS
 		// Kept visible in Bricks so the controls are always accessible.
@@ -172,6 +182,28 @@ class Parola_Element_D3_Chart extends \Bricks\Element {
 			'small'    => true,
 			'default'  => true,
 			'rerender' => true,
+		);
+
+		// =========================================================
+		// COLUMN CHART OPTIONS
+		// =========================================================
+
+		$this->controls['columnOptionsInfo'] = array(
+			'tab'      => 'content',
+			'type'     => 'info',
+			'content'  => esc_html__( 'Column Chart Options', 'bricks' ),
+			'required' => array( array( 'chartType', '=', 'bar' ) ),
+		);
+
+		$this->controls['thickShortColumns'] = array(
+			'tab'      => 'content',
+			'label'    => esc_html__( 'Thick & Short Columns', 'bricks' ),
+			'type'     => 'checkbox',
+			'inline'   => true,
+			'small'    => true,
+			'default'  => false,
+			'rerender' => true,
+			'required' => array( array( 'chartType', '=', 'bar' ) ),
 		);
 	}
 
@@ -397,6 +429,16 @@ class Parola_Element_D3_Chart extends \Bricks\Element {
 			'showStackTotals'
 		);
 
+		$show_percentage = $this->get_checkbox_setting(
+			$settings,
+			'showPercentage'
+		);
+
+		$thick_short_columns = $this->get_checkbox_setting(
+			$settings,
+			'thickShortColumns'
+		);
+
 		$bool_attr = static function ( $value ) {
 			return $value ? 'true' : 'false';
 		};
@@ -488,6 +530,18 @@ class Parola_Element_D3_Chart extends \Bricks\Element {
 			'canvas',
 			'data-show-stack-totals',
 			$bool_attr( $show_stack_totals )
+		);
+
+		$this->set_attribute(
+			'canvas',
+			'data-show-percentage',
+			$bool_attr( $show_percentage )
+		);
+
+		$this->set_attribute(
+			'canvas',
+			'data-thick-columns',
+			$bool_attr( $thick_short_columns )
 		);
 
 		echo '<div ' . $this->render_attributes( '_root' ) . '>';
