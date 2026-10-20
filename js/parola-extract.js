@@ -1,7 +1,9 @@
 /**
  * Parola Bulk Dataset Extractor & Interactive Dashboard
- * Version 1.1.3
- * Turned Stat A-D Extracted Tab names dynamic to column header at row 3 of source data
+ * Version 1.1.4
+ * - Fixed richText cell parsing in fetchExcelAsRows (resolves label output error in Stat tabs such as "2025 Ranking")
+ * - Firm Rankings tab: Industry data with "N/A" values now display "Unranked"
+ * - Turned Stat A-D Extracted Tab names dynamic to column header at row 3 of source data
  * 
  * Provides both programmatic API (window.parolaExtractBulkDataset) and an
  * interactive visual dashboard for any element matching ".d3-extract".
@@ -94,9 +96,29 @@
                             var val = cell.value;
                             if (val === null || val === undefined) val = "";
                             else if (typeof val === "object") {
-                                if (val.text !== undefined) val = val.text;
-                                else if (val.result !== undefined) val = val.result;
-                                else val = JSON.stringify(val);
+                                if (val.richText && Array.isArray(val.richText)) {
+                                    val = val.richText.map(function (rt) {
+                                        return (rt && rt.text !== undefined) ? rt.text : "";
+                                    }).join("");
+                                } else if (val.text !== undefined) {
+                                    val = val.text;
+                                } else if (val.result !== undefined) {
+                                    if (typeof val.result === "object" && val.result !== null) {
+                                        if (val.result.richText && Array.isArray(val.result.richText)) {
+                                            val = val.result.richText.map(function (rt) {
+                                                return (rt && rt.text !== undefined) ? rt.text : "";
+                                            }).join("");
+                                        } else if (val.result.text !== undefined) {
+                                            val = val.result.text;
+                                        } else {
+                                            val = JSON.stringify(val.result);
+                                        }
+                                    } else {
+                                        val = val.result;
+                                    }
+                                } else {
+                                    val = JSON.stringify(val);
+                                }
                             }
                             rowValues.push(String(val));
                         }
@@ -378,6 +400,12 @@
         return num / 100;
     }
 
+    function isNA(val) {
+        if (val === undefined || val === null) return false;
+        var s = String(val).trim().toUpperCase();
+        return s === "N/A" || s === "#N/A" || s === "NA";
+    }
+
     function addFirmRankingSheet(wb, sheetName, entityName, industries) {
         var ws = wb.addWorksheet(sheetName);
         var r1 = ws.addRow(["Entity Name", entityName]);
@@ -397,12 +425,31 @@
         });
         industries.forEach(function (ind) {
             var rawRank = (ind.rank !== undefined && String(ind.rank).trim() !== "") ? ind.rank : ind.position;
+            var isRankNA = isNA(rawRank);
             var rankNum = parseInt(String(rawRank).replace(/,/g, ""), 10);
-            var rankCellVal = !isNaN(rankNum) ? rankNum : rawRank;
+            var rankCellVal = isRankNA ? "Unranked" : (!isNaN(rankNum) ? rankNum : rawRank);
 
-            var patVal = parseInt(String(ind.patents).replace(/,/g, ""), 10);
-            if (isNaN(patVal)) patVal = parseFloat(ind.patents) || 0;
-            var effVal = parsePercentageForExcel(ind.efficiencyRate);
+            var isPatNA = isNA(ind.patents);
+            var patVal;
+            if (isPatNA) {
+                patVal = "Unranked";
+            } else {
+                patVal = parseInt(String(ind.patents).replace(/,/g, ""), 10);
+                if (isNaN(patVal)) patVal = parseFloat(ind.patents) || 0;
+            }
+
+            var isEffNA = isNA(ind.efficiencyRate);
+            var effVal;
+            if (isEffNA) {
+                effVal = "Unranked";
+            } else {
+                effVal = parsePercentageForExcel(ind.efficiencyRate);
+            }
+
+            if (rankCellVal === "Unranked") {
+                if (patVal === 0 || patVal === "" || isPatNA) patVal = "Unranked";
+                if (effVal === "" || isEffNA) effVal = "Unranked";
+            }
 
             var row = ws.addRow([ind.industry, rankCellVal, patVal, effVal]);
             if (typeof rankCellVal === "number") row.getCell(2).numFmt = '#,##0';
@@ -539,10 +586,22 @@
         });
         statMarkersSorted.forEach(function (marker) {
             var colIdx = statCols[marker];
-            var label = (headerRow[colIdx] || "").trim().replace(/\r?\n/g, " ");
+            var rawHeader = headerRow[colIdx] || "";
+            if (typeof rawHeader === "string" && rawHeader.trim().indexOf('{"richText":') === 0) {
+                try {
+                    var parsed = JSON.parse(rawHeader.trim());
+                    if (parsed && Array.isArray(parsed.richText)) {
+                        rawHeader = parsed.richText.map(function (rt) {
+                            return (rt && rt.text !== undefined) ? rt.text : "";
+                        }).join("");
+                    }
+                } catch (e) {}
+            }
+            var label = rawHeader.trim().replace(/\r?\n/g, " ");
             if (!label) return; // If header in row 3 is empty, no need to make a sheet
             var value = entityRow[colIdx] !== undefined ? String(entityRow[colIdx]).trim() : "";
-            var sheetTitle = getUniqueSheetName(wb, label, marker);
+            var firstLine = rawHeader.split(/\r?\n/)[0].trim();
+            var sheetTitle = getUniqueSheetName(wb, firstLine || label, marker);
             addDataBlockSheet(wb, sheetTitle, label, value);
         });
 
@@ -601,6 +660,15 @@
                         rankVal = val;
                     }
                 }
+                if (isNA(rankVal)) rankVal = "Unranked";
+                if (isNA(posVal)) posVal = "Unranked";
+                if (isNA(patVal)) patVal = "Unranked";
+                if (isNA(effVal)) effVal = "Unranked";
+                if (rankVal === "Unranked" || posVal === "Unranked") {
+                    if (patVal === "" || isNA(patVal)) patVal = "Unranked";
+                    if (effVal === "" || isNA(effVal)) effVal = "Unranked";
+                }
+
                 return {
                     industry: industryName,
                     rank: rankVal,
