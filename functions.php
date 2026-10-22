@@ -280,7 +280,8 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.92.2', 
+        '1.0.92.3',
+		// 1.0.92.3 - Firm Ranking Table - Restored info icon + hover tooltip beside "Industry Position" header
 		// 1.0.92.2 - Frequency & Percentage Table - Description column hidden from table display, shown exclusively via hover tooltip
 		// 1.0.92.1 - Count-Percentage Table - Added header presets toggle (Tech Center vs CPC)
 		// 1.0.93 - Firm Ranking Table - Info icon + hover tooltip beside "Industry Position" header
