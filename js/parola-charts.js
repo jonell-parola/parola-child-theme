@@ -3,6 +3,7 @@
  *
  * Supports any number of .d3-test-canvas elements on the same page.
  * 
+ * 1.0.92.3 - Firm Ranking Table - Restored info icon + hover tooltip beside "Industry Position" header ("Rank based on volume of granted patents")
  * 1.0.92.2 - Frequency & Percentage Table - Description column hidden from table display, shown exclusively via hover tooltip
  * 1.0.92.1 - Count-Percentage Table - Added header presets toggle (Tech Center vs CPC)
  * 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together
@@ -8835,7 +8836,7 @@
 
                 const columns = [
                     { key: "industry", label: "Industry", align: "left" },
-                    { key: "position", label: "Industry Position", align: "left" },
+                    { key: "position", label: "Industry Position", align: "left", info: "Rank based on volume of granted patents" },
                     { key: "patents", label: "Number of Granted Patents", align: "right" },
                     { key: "grantRate", label: "Efficiency Rate", align: "right" }
                 ];
@@ -8844,7 +8845,7 @@
                 const cellPaddingH = `${Math.max(10, Math.round(14 * fontScale))}px`;
 
                 columns.forEach(function (col) {
-                    headerTr.append("th")
+                    const th = headerTr.append("th")
                         .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                         .style("text-align", col.align)
                         .style("font-weight", "600")
@@ -8852,6 +8853,11 @@
                         .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
                         .style("white-space", "nowrap")
                         .text(col.label);
+
+                    // Optional info icon with hover tooltip (add `info` to any column above).
+                    if (col.info) {
+                        appendInfoIcon(th, col.info, Math.max(13, Math.round(15 * fontScale)));
+                    }
                 });
 
                 const tbody = table.append("tbody");
