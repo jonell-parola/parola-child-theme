@@ -280,8 +280,11 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.92.3',
-		// 1.0.92.3 - Firm Ranking Table - Restored info icon + hover tooltip beside "Industry Position" header
+        '1.0.96', 
+		// 1.0.96 - Consistent decimal formatting: percentages show 1 decimal place (XX.X%) across all chart types; data-block values show 2 decimal places for decimals, none for whole numbers
+		// 1.0.95 - Firm Ranking Table - Industry Position Color Fix
+		// 1.0.94 - Firm Ranking Table - Fixed position column to pull from raw data column (Industry Position)
+		// 1.0.92.3 - Frequency & Percentage Table - Description column hidden from table display, shown exclusively via hover tooltip
 		// 1.0.92.2 - Frequency & Percentage Table - Description column hidden from table display, shown exclusively via hover tooltip
 		// 1.0.92.1 - Count-Percentage Table - Added header presets toggle (Tech Center vs CPC)
 		// 1.0.93 - Firm Ranking Table - Info icon + hover tooltip beside "Industry Position" header
@@ -289,7 +292,7 @@ function parola_enqueue_visualization_assets() {
         // 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together + 1.0.90 - Added description column + hover popup to Frequency Table and Percentage Table
         // 1.0.89 - Firm Ranking Table - First entity name now only shows once and not in every row + 1.0.88 - Added table headers for Count-Percentage Table + 1.0.87 - Added Data Block, Count-Percentage Table, Modified Column to just be Short and not Thick, Removed Rank Column from Firm Ranking Table
         // EXPERIMENTAL VERSIONS: "1.0.52","1.0.53","1.0.54", "1.0.56", "1.0.57", "1.0.58", "1.0.59", "1.0.60", "1.0.62", "1.0.63", "1.0.64", "1.0.65", "1.0.66", "1.0.67", "1.0.68", "1.0.70"
-		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73", "1.0.74", "1.0.75", "1.0.76", "1.0.77", "1.0.79", "1.0.80", "1.0.81", "1.0.82", "1.0.83", "1.0.84", "1.0.85", "1.0.86", "1.0.87", "1.0.88", "1.0.89", "1.0.90"
+		// STABLE VERSIONS: "1.0.51", "1.0.55", "1.0.60", "1.0.69", "1.0.71", "1.0.72", "1.0.73", "1.0.74", "1.0.75", "1.0.76", "1.0.77", "1.0.79", "1.0.80", "1.0.81", "1.0.82", "1.0.83", "1.0.84", "1.0.85", "1.0.86", "1.0.87", "1.0.88", "1.0.89", "1.0.90", "1.0.91", "1.0.92", "1.0.93", "1.0.94", "1.0.95"
 		// JONELL'S VERSION: "1.0.61"
         true
     );
@@ -299,7 +302,15 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.1.4',
+        '1.1.8',
+		// 1.1.8 - Decimal formatting: numbers with decimal places shown to 2 decimal places in all extracted sheets
+		// 1.1.7:
+		// - Firm Rankings tab: Entity Name cell (row 1, col 2) now uses Display Name (col 2 of source) instead of Entity Name
+ 		// - Firm Rankings tab: Rank column now formatted as "#X of Y" using total_positions from industry row of source dataset
+		// 1.1.6 - Technology Breakdown (CPC) tab: Added "Efficiency Rate" column (4th column) sourced from Chart C data, matched by CPC code, stored as decimal and formatted as percentage (0.00%)
+		// 1.1.5:
+		// - Normalized Stat A-D tab names and labels to not be multiline and prevent richText JSON output
+		// - Firm Rankings tab: Industry rows with #N/A values display String "Unranked" across Rank, Granted Patents, and 3YR Grant Rate
 		// 1.1.4:
 		// - Fixed richText cell parsing in fetchExcelAsRows (resolves label output error in Stat tabs such as "2025 Ranking")
 		// - Firm Rankings tab: Industry data with "N/A" values now display "Unranked"
