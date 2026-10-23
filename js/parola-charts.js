@@ -2,8 +2,10 @@
  * Parola Visualization Engine - Multi-instance Customization Dashboard
  *
  * Supports any number of .d3-test-canvas elements on the same page.
- * 
- * 1.0.92.3 - Firm Ranking Table - Restored info icon + hover tooltip beside "Industry Position" header ("Rank based on volume of granted patents")
+ * 1.0.96 - Consistent decimal formatting: percentages show 1 decimal place (XX.X%) across all chart types; data-block values show 2 decimal places for decimals, none for whole numbers
+ * 1.0.95 - Firm Ranking Table Industry Position Color
+ * 1.0.94 - Firm Ranking Table - Fixed position column to pull from raw data column (Industry Position)
+ * 1.0.92.3 - Frequency & Percentage Table - Description column hidden from table display and excluded from column resolution, shown exclusively via hover tooltip
  * 1.0.92.2 - Frequency & Percentage Table - Description column hidden from table display, shown exclusively via hover tooltip
  * 1.0.92.1 - Count-Percentage Table - Added header presets toggle (Tech Center vs CPC)
  * 1.0.91 - Firm Ranking Table - Reformatted Industry and Industry Position Column headers to not be so close together
@@ -1529,7 +1531,11 @@
             }
             const num = Number(str);
             if (!isNaN(num)) {
-                return num.toLocaleString();
+                // Show 2 decimal places if the number has a decimal component; no decimals for whole numbers
+                if (Number.isInteger(num)) {
+                    return num.toLocaleString();
+                }
+                return parseFloat(num.toFixed(2)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
             return str;
         }
@@ -7672,11 +7678,7 @@
                         : maxCompanyVal;
 
                 const maxPctText =
-                    `${Number(
-                        maxPctVal.toFixed(
-                            2
-                        )
-                    )}%`;
+                    `${parseFloat(maxPctVal.toFixed(1)).toFixed(1)}%`;
 
                 const minPctText =
                     "0%";
@@ -7852,11 +7854,22 @@
                             "border-box"
                         );
 
+                const nonDescKeys = keys.filter(function (k) {
+                    return k.toLowerCase() !== "description";
+                });
+
                 const firstColKey =
-                    categoryKey;
+                    (categoryKey && categoryKey.toLowerCase() !== "description")
+                        ? categoryKey
+                        : (nonDescKeys[0] || keys[0]);
 
                 const secondColKey =
-                    (valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
+                    (valueKeys.length > 0 && valueKeys[0].toLowerCase() !== "description" ? valueKeys[0] : null) ||
+                    nonDescKeys.find(function (k) {
+                        return k !== firstColKey;
+                    }) ||
+                    nonDescKeys[1] ||
+                    nonDescKeys[0] ||
                     keys[0];
 
                 // Resolve description key for frequency table
@@ -8262,11 +8275,22 @@
                             "border-box"
                         );
 
+                const nonDescKeys = keys.filter(function (k) {
+                    return k.toLowerCase() !== "description";
+                });
+
                 const firstColKey =
-                    categoryKey;
+                    (categoryKey && categoryKey.toLowerCase() !== "description")
+                        ? categoryKey
+                        : (nonDescKeys[0] || keys[0]);
 
                 const secondColKey =
-                    (valueKeys.length > 0 ? valueKeys[0] : keys[1]) ||
+                    (valueKeys.length > 0 && valueKeys[0].toLowerCase() !== "description" ? valueKeys[0] : null) ||
+                    nonDescKeys.find(function (k) {
+                        return k !== firstColKey;
+                    }) ||
+                    nonDescKeys[1] ||
+                    nonDescKeys[0] ||
                     keys[0];
 
                 // Resolve description key for percentage table
@@ -8370,25 +8394,25 @@
                             if (trimmed.endsWith("%")) {
                                 numericVal = parseFloat(trimmed.replace(/%/g, "")) || 0;
                                 fillPercent = Math.max(0, Math.min(100, numericVal));
-                                displayCount = trimmed;
+                                displayCount = `${numericVal.toFixed(1)}%`;
                             } else {
                                 numericVal = parseFloat(trimmed) || 0;
                                 if (numericVal > 0 && numericVal <= 1) {
                                     fillPercent = numericVal * 100;
-                                    displayCount = `${Math.round(fillPercent * 10) / 10}%`;
+                                    displayCount = `${fillPercent.toFixed(1)}%`;
                                 } else {
                                     fillPercent = Math.max(0, Math.min(100, numericVal));
-                                    displayCount = `${Math.round(fillPercent * 10) / 10}%`;
+                                    displayCount = `${fillPercent.toFixed(1)}%`;
                                 }
                             }
                         } else if (typeof rawVal === "number") {
                             numericVal = rawVal;
                             if (numericVal > 0 && numericVal <= 1) {
                                 fillPercent = numericVal * 100;
-                                displayCount = `${Math.round(fillPercent * 10) / 10}%`;
+                                displayCount = `${fillPercent.toFixed(1)}%`;
                             } else {
                                 fillPercent = Math.max(0, Math.min(100, numericVal));
-                                displayCount = `${Math.round(fillPercent * 10) / 10}%`;
+                                displayCount = `${fillPercent.toFixed(1)}%`;
                             }
                         } else {
                             displayCount = String(rawVal);
@@ -8657,25 +8681,25 @@
                             if (trimmed.endsWith("%")) {
                                 numericPercent = parseFloat(trimmed.replace(/%/g, "")) || 0;
                                 fillPercent = Math.max(0, Math.min(100, numericPercent));
-                                displayPercent = trimmed;
+                                displayPercent = `${numericPercent.toFixed(1)}%`;
                             } else {
                                 numericPercent = parseFloat(trimmed) || 0;
                                 if (numericPercent > 0 && numericPercent <= 1) {
                                     fillPercent = numericPercent * 100;
-                                    displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                    displayPercent = `${fillPercent.toFixed(1)}%`;
                                 } else {
                                     fillPercent = Math.max(0, Math.min(100, numericPercent));
-                                    displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                    displayPercent = `${fillPercent.toFixed(1)}%`;
                                 }
                             }
                         } else if (typeof rawThirdVal === "number") {
                             numericPercent = rawThirdVal;
                             if (numericPercent > 0 && numericPercent <= 1) {
                                 fillPercent = numericPercent * 100;
-                                displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                displayPercent = `${fillPercent.toFixed(1)}%`;
                             } else {
                                 fillPercent = Math.max(0, Math.min(100, numericPercent));
-                                displayPercent = `${Math.round(fillPercent * 10) / 10}%`;
+                                displayPercent = `${fillPercent.toFixed(1)}%`;
                             }
                         } else {
                             displayPercent = String(rawThirdVal);
@@ -8836,7 +8860,7 @@
 
                 const columns = [
                     { key: "industry", label: "Industry", align: "left" },
-                    { key: "position", label: "Industry Position", align: "left", info: "Rank based on volume of granted patents" },
+                    { key: "position", label: "Industry Position", align: "left" },
                     { key: "patents", label: "Number of Granted Patents", align: "right" },
                     { key: "grantRate", label: "Efficiency Rate", align: "right" }
                 ];
@@ -8845,7 +8869,7 @@
                 const cellPaddingH = `${Math.max(10, Math.round(14 * fontScale))}px`;
 
                 columns.forEach(function (col) {
-                    const th = headerTr.append("th")
+                    headerTr.append("th")
                         .style("padding", `${cellPaddingV} ${cellPaddingH}`)
                         .style("text-align", col.align)
                         .style("font-weight", "600")
@@ -8853,11 +8877,6 @@
                         .style("font-size", `${Math.max(11, Math.round(13 * fontScale))}px`)
                         .style("white-space", "nowrap")
                         .text(col.label);
-
-                    // Optional info icon with hover tooltip (add `info` to any column above).
-                    if (col.info) {
-                        appendInfoIcon(th, col.info, Math.max(13, Math.round(15 * fontScale)));
-                    }
                 });
 
                 const tbody = table.append("tbody");
@@ -8866,18 +8885,21 @@
                     if (val === null || val === undefined || val === '') return '';
                     if (typeof val === 'number') {
                         if (val > 0 && val <= 1) {
-                            return `${Math.round(val * 100)}%`;
+                            return `${(val * 100).toFixed(1)}%`;
                         }
-                        return `${val}%`;
+                        return `${val.toFixed(1)}%`;
                     }
                     const str = String(val).trim();
-                    if (str.endsWith('%')) return str;
+                    if (str.endsWith('%')) {
+                        const inner = parseFloat(str.replace(/%/g, ''));
+                        return isNaN(inner) ? str : `${inner.toFixed(1)}%`;
+                    }
                     const num = parseFloat(str);
                     if (!isNaN(num)) {
                         if (num > 0 && num <= 1 && str.includes('.')) {
-                            return `${Math.round(num * 100)}%`;
+                            return `${(num * 100).toFixed(1)}%`;
                         }
-                        return `${str}%`;
+                        return `${num.toFixed(1)}%`;
                     }
                     return str;
                 }
@@ -8885,6 +8907,25 @@
                 function getPositionBadgeInfo(rawPos) {
                     const str = String(rawPos !== null && rawPos !== undefined ? rawPos : '').trim();
                     const lower = str.toLowerCase();
+
+                    // Handle "#55 of 128" format: compute rank percentage from rank/total
+                    const rankOfTotalMatch = str.match(/^#?\s*(\d[\d,]*)\s+of\s+(\d[\d,]*)\s*$/i);
+                    if (rankOfTotalMatch) {
+                        const rankNum = parseInt(rankOfTotalMatch[1].replace(/,/g, ''), 10);
+                        const totalNum = parseInt(rankOfTotalMatch[2].replace(/,/g, ''), 10);
+                        if (!isNaN(rankNum) && !isNaN(totalNum) && totalNum > 0) {
+                            const pct = (rankNum / totalNum) * 100;
+                            if (pct > 0 && pct <= 10) {
+                                return { color: '#10b981', label: str }; // green
+                            } else if (pct > 10 && pct <= 40) {
+                                return { color: '#3b82f6', label: str }; // blue
+                            } else {
+                                return { color: '#9ca3af', label: str }; // gray
+                            }
+                        }
+                    }
+
+                    // Legacy: plain percentage or keyword-based matching
                     let num = parseFloat(str.replace(/%/g, ''));
                     if (!isNaN(num) && num > 0 && num <= 1 && str.includes('.')) {
                         num = num * 100;
@@ -8952,7 +8993,7 @@
                             .style("flex-shrink", "0");
 
                         posWrapper.append("span")
-                            .text(badgeInfo.label);
+                            .text(rec.position !== undefined && rec.position !== null && String(rec.position).trim() !== '' ? String(rec.position) : badgeInfo.label);
 
                         // 3. Number of Granted Patents
                         let formattedPatents = "";
