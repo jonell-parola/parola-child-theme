@@ -1,9 +1,14 @@
 /**
  * Parola Bulk Dataset Extractor & Interactive Dashboard
- * Version 1.1.4
- * - Fixed richText cell parsing in fetchExcelAsRows (resolves label output error in Stat tabs such as "2025 Ranking")
- * - Firm Rankings tab: Industry data with "N/A" values now display "Unranked"
- * - Turned Stat A-D Extracted Tab names dynamic to column header at row 3 of source data
+ * Version 1.1.8
+ * - Decimal formatting: numbers with decimal places shown to 2 decimal places in all extracted sheets
+ * - Firm Rankings tab: Entity Name cell (row 1, col 2) now uses Display Name (col 2 of source) instead of Entity Name
+ * - Firm Rankings tab: Rank column now formatted as "#X of Y" using total_positions from industry row of source dataset
+ * - Technology Breakdown (CPC) tab: Added "Efficiency Rate" column (4th column) sourced from Chart C data,
+ *   matched by CPC code, stored as decimal and formatted as percentage (0.00%)
+ * - Normalized Stat A-D extracted tab names and labels to be non-multiline and prevent richText JSON output
+ * - Firm Rankings tab: Industry rows with #N/A values display String "Unranked" across Rank, Granted Patents, and 3YR Grant Rate
+ * - Enhanced Excel error and cell value extraction in fetchExcelAsRows
  * 
  * Provides both programmatic API (window.parolaExtractBulkDataset) and an
  * interactive visual dashboard for any element matching ".d3-extract".
@@ -76,6 +81,50 @@
         });
     }
 
+    function extractCellValue(val) {
+        if (val === null || val === undefined) return "";
+        if (typeof val === "object") {
+            if (val.error !== undefined) {
+                return String(val.error);
+            }
+            if (val.result !== undefined) {
+                if (typeof val.result === "object" && val.result !== null) {
+                    if (val.result.error !== undefined) {
+                        return String(val.result.error);
+                    }
+                    if (val.result.richText && Array.isArray(val.result.richText)) {
+                        return val.result.richText.map(function (rt) {
+                            return (rt && rt.text !== undefined) ? rt.text : "";
+                        }).join("");
+                    }
+                    if (val.result.text !== undefined) {
+                        return typeof val.result.text === "object" ? extractCellValue(val.result.text) : String(val.result.text);
+                    }
+                    return JSON.stringify(val.result);
+                }
+                return String(val.result);
+            }
+            if (val.richText && Array.isArray(val.richText)) {
+                return val.richText.map(function (rt) {
+                    return (rt && rt.text !== undefined) ? rt.text : "";
+                }).join("");
+            }
+            if (val.text !== undefined) {
+                return typeof val.text === "object" ? extractCellValue(val.text) : String(val.text);
+            }
+            try {
+                var s = JSON.stringify(val);
+                if (s.indexOf("#N/A") !== -1 || s.indexOf("N/A") !== -1) {
+                    return "#N/A";
+                }
+                return s;
+            } catch (e) {
+                return "";
+            }
+        }
+        return String(val);
+    }
+
     function fetchExcelAsRows(url) {
         return fetch(url)
             .then(function (res) {
@@ -93,34 +142,8 @@
                         var rowValues = [];
                         for (var c = 1; c <= maxCols; c++) {
                             var cell = row.getCell(c);
-                            var val = cell.value;
-                            if (val === null || val === undefined) val = "";
-                            else if (typeof val === "object") {
-                                if (val.richText && Array.isArray(val.richText)) {
-                                    val = val.richText.map(function (rt) {
-                                        return (rt && rt.text !== undefined) ? rt.text : "";
-                                    }).join("");
-                                } else if (val.text !== undefined) {
-                                    val = val.text;
-                                } else if (val.result !== undefined) {
-                                    if (typeof val.result === "object" && val.result !== null) {
-                                        if (val.result.richText && Array.isArray(val.result.richText)) {
-                                            val = val.result.richText.map(function (rt) {
-                                                return (rt && rt.text !== undefined) ? rt.text : "";
-                                            }).join("");
-                                        } else if (val.result.text !== undefined) {
-                                            val = val.result.text;
-                                        } else {
-                                            val = JSON.stringify(val.result);
-                                        }
-                                    } else {
-                                        val = val.result;
-                                    }
-                                } else {
-                                    val = JSON.stringify(val);
-                                }
-                            }
-                            rowValues.push(String(val));
+                            var val = extractCellValue(cell.value);
+                            rowValues.push(val);
                         }
                         rows.push(rowValues);
                     });
@@ -261,7 +284,22 @@
     function addDataBlockSheet(wb, sheetName, label, value) {
         var ws = wb.addWorksheet(sheetName);
         var r1 = ws.addRow(["Label", label || ""]);
-        var r2 = ws.addRow(["Value", value !== undefined ? String(value) : ""]);
+        // Format value: if numeric with decimal places, show 2dp; if whole number, show as integer
+        var displayValue = "";
+        if (value !== undefined && value !== null && String(value).trim() !== "") {
+            var strVal = String(value).trim();
+            var numVal = parseFloat(strVal.replace(/,/g, ""));
+            if (!isNaN(numVal) && !strVal.endsWith("%") && strVal.indexOf(",") === -1) {
+                if (Number.isInteger(numVal)) {
+                    displayValue = String(numVal);
+                } else {
+                    displayValue = numVal.toFixed(2);
+                }
+            } else {
+                displayValue = strVal;
+            }
+        }
+        var r2 = ws.addRow(["Value", displayValue]);
         r1.getCell(1).font = { bold: true, size: 11, color: { argb: "FF475569" } };
         r2.getCell(1).font = { bold: true, size: 11, color: { argb: "FF475569" } };
         r2.getCell(2).font = { bold: true, size: 14 };
@@ -269,15 +307,26 @@
         ws.getColumn(2).width = 40;
     }
 
-    function addFrequencySheet(wb, sheetName, title, pairs, cpcDescMap) {
+    function addFrequencySheet(wb, sheetName, title, pairs, cpcDescMap, effRatePairs) {
         var ws = wb.addWorksheet(sheetName);
         addTitleRows(ws, title || "Technology Breakdown (CPC)", "");
-        var headRow = ws.addRow(["CPC Section", "Description", "Frequency"]);
+        var headRow = ws.addRow(["CPC Section", "Description", "Frequency", "Efficiency Rate"]);
         headRow.eachCell(function (cell) {
             cell.font = HEADER_FONT;
             cell.fill = HEADER_FILL;
             cell.border = HEADER_BORDER;
         });
+
+        // Build a lookup map from CPC code -> efficiency rate value
+        var effRateMap = {};
+        if (effRatePairs && Array.isArray(effRatePairs)) {
+            effRatePairs.forEach(function (p) {
+                if (p && p.key) {
+                    var rateNum = parseFloat(String(p.value).replace(/%/g, ""));
+                    effRateMap[p.key.trim()] = isNaN(rateNum) ? null : rateNum / 100;
+                }
+            });
+        }
 
         // Limit to top 10 entries (ties broken by source data order)
         var topPairs = pairs.map(function (p, idx) {
@@ -293,15 +342,21 @@
         topPairs.forEach(function (pair) {
             var desc = cpcDescMap[pair.key] || "";
             var freq = parseFloat(pair.value);
-            var row = ws.addRow([pair.key, desc, isNaN(freq) ? pair.value : freq]);
+            var effRate = effRateMap.hasOwnProperty(pair.key) ? effRateMap[pair.key] : null;
+            var rowData = [pair.key, desc, isNaN(freq) ? pair.value : freq, effRate !== null ? effRate : ""];
+            var row = ws.addRow(rowData);
             if (!isNaN(freq)) {
                 row.getCell(3).numFmt = '#,##0';
+            }
+            if (effRate !== null) {
+                row.getCell(4).numFmt = '0.00%';
             }
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 16;
         ws.getColumn(2).width = 45;
         ws.getColumn(3).width = 16;
+        ws.getColumn(4).width = 18;
     }
 
     function addCountPercentageSheet(wb, sheetName, countPairs, pctPairs, tcDescMap) {
@@ -400,15 +455,86 @@
         return num / 100;
     }
 
-    function isNA(val) {
-        if (val === undefined || val === null) return false;
-        var s = String(val).trim().toUpperCase();
-        return s === "N/A" || s === "#N/A" || s === "NA";
+    function cleanRichTextOrMultiline(val) {
+        if (val === null || val === undefined) return "";
+        var str = "";
+        if (typeof val === "object") {
+            if (Array.isArray(val.richText)) {
+                str = val.richText.map(function (rt) {
+                    return (rt && rt.text !== undefined) ? rt.text : "";
+                }).join("");
+            } else if (val.text !== undefined) {
+                str = typeof val.text === "object" ? cleanRichTextOrMultiline(val.text) : String(val.text);
+            } else if (val.result !== undefined) {
+                str = cleanRichTextOrMultiline(val.result);
+            } else {
+                try {
+                    str = JSON.stringify(val);
+                } catch (e) {
+                    str = "";
+                }
+            }
+        } else {
+            str = String(val);
+        }
+
+        if (str.indexOf("richText") !== -1) {
+            try {
+                var parsed = JSON.parse(str.trim());
+                if (parsed && Array.isArray(parsed.richText)) {
+                    str = parsed.richText.map(function (rt) {
+                        return (rt && rt.text !== undefined) ? rt.text : "";
+                    }).join("");
+                }
+            } catch (e) {
+                var matches = [];
+                var re = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+                var m;
+                while ((m = re.exec(str)) !== null) {
+                    try {
+                        matches.push(JSON.parse('"' + m[1] + '"'));
+                    } catch (err) {
+                        matches.push(m[1]);
+                    }
+                }
+                if (matches.length > 0) {
+                    str = matches.join("");
+                }
+            }
+        }
+
+        return str;
     }
 
-    function addFirmRankingSheet(wb, sheetName, entityName, industries) {
+    function normalizeStatHeader(raw) {
+        var plain = cleanRichTextOrMultiline(raw);
+        var lines = plain.split(/\r?\n/).map(function (s) {
+            return s.trim();
+        }).filter(function (s) {
+            return s.length > 0;
+        });
+        return lines.length > 0 ? lines[0] : "";
+    }
+
+    function isNA(val) {
+        if (val === undefined || val === null) return false;
+        if (typeof val === "object") {
+            if (val.error !== undefined && String(val.error).toUpperCase().indexOf("N/A") !== -1) return true;
+            if (val.result !== undefined) return isNA(val.result);
+            try {
+                var sObj = JSON.stringify(val).toUpperCase();
+                if (sObj.indexOf("#N/A") !== -1 || sObj.indexOf("N/A") !== -1) return true;
+            } catch (e) { }
+        }
+        var s = String(val).trim().toUpperCase();
+        if (s === "N/A" || s === "#N/A" || s === "NA" || s === "[OBJECT OBJECT]") return true;
+        if (s.indexOf("#N/A") !== -1 || s.indexOf('"ERROR":"#N/A"') !== -1 || s.indexOf('"ERROR": "#N/A"') !== -1) return true;
+        return false;
+    }
+
+    function addFirmRankingSheet(wb, sheetName, entityName, displayName, industries) {
         var ws = wb.addWorksheet(sheetName);
-        var r1 = ws.addRow(["Entity Name", entityName]);
+        var r1 = ws.addRow(["Entity Name", displayName || entityName]);
         r1.getCell(1).font = { bold: true, size: 11, color: { argb: "FF475569" } };
         r1.getCell(2).font = TITLE_FONT;
 
@@ -425,40 +551,43 @@
         });
         industries.forEach(function (ind) {
             var rawRank = (ind.rank !== undefined && String(ind.rank).trim() !== "") ? ind.rank : ind.position;
-            var isRankNA = isNA(rawRank);
-            var rankNum = parseInt(String(rawRank).replace(/,/g, ""), 10);
-            var rankCellVal = isRankNA ? "Unranked" : (!isNaN(rankNum) ? rankNum : rawRank);
+            var isAnyNA = isNA(rawRank) || isNA(ind.patents) || isNA(ind.efficiencyRate) ||
+                rawRank === "Unranked" || ind.patents === "Unranked" || ind.efficiencyRate === "Unranked" ||
+                String(rawRank).indexOf("[object") !== -1 || String(ind.patents).indexOf("[object") !== -1;
 
-            var isPatNA = isNA(ind.patents);
-            var patVal;
-            if (isPatNA) {
+            var rankCellVal, patVal, effVal;
+
+            if (isAnyNA) {
+                rankCellVal = "Unranked";
                 patVal = "Unranked";
-            } else {
-                patVal = parseInt(String(ind.patents).replace(/,/g, ""), 10);
-                if (isNaN(patVal)) patVal = parseFloat(ind.patents) || 0;
-            }
-
-            var isEffNA = isNA(ind.efficiencyRate);
-            var effVal;
-            if (isEffNA) {
                 effVal = "Unranked";
             } else {
-                effVal = parsePercentageForExcel(ind.efficiencyRate);
-            }
+                // Use pre-formatted rank string (e.g. "#55 of 128") if available, else fall back to number
+                if (ind.formattedRank) {
+                    rankCellVal = ind.formattedRank;
+                } else {
+                    var rankNum = parseInt(String(rawRank).replace(/,/g, ""), 10);
+                    rankCellVal = !isNaN(rankNum) ? rankNum : String(rawRank);
+                }
 
-            if (rankCellVal === "Unranked") {
-                if (patVal === 0 || patVal === "" || isPatNA) patVal = "Unranked";
-                if (effVal === "" || isEffNA) effVal = "Unranked";
+                var patNum = parseInt(String(ind.patents).replace(/,/g, ""), 10);
+                patVal = !isNaN(patNum) ? patNum : (parseFloat(ind.patents) || 0);
+
+                effVal = parsePercentageForExcel(ind.efficiencyRate);
+                if (effVal === "" || isNaN(effVal)) {
+                    effVal = "Unranked";
+                }
             }
 
             var row = ws.addRow([ind.industry, rankCellVal, patVal, effVal]);
+            // Only apply number format if rankCellVal is a plain number (not a formatted string like "#55 of 128")
             if (typeof rankCellVal === "number") row.getCell(2).numFmt = '#,##0';
             if (typeof patVal === "number") row.getCell(3).numFmt = '#,##0';
             if (typeof effVal === "number") row.getCell(4).numFmt = '0%';
             row.eachCell(function (cell) { cell.border = CELL_BORDER_BOTTOM; });
         });
         ws.getColumn(1).width = 28;
-        ws.getColumn(2).width = 16;
+        ws.getColumn(2).width = 20;
         ws.getColumn(3).width = 20;
         ws.getColumn(4).width = 18;
     }
@@ -587,31 +716,26 @@
         statMarkersSorted.forEach(function (marker) {
             var colIdx = statCols[marker];
             var rawHeader = headerRow[colIdx] || "";
-            if (typeof rawHeader === "string" && rawHeader.trim().indexOf('{"richText":') === 0) {
-                try {
-                    var parsed = JSON.parse(rawHeader.trim());
-                    if (parsed && Array.isArray(parsed.richText)) {
-                        rawHeader = parsed.richText.map(function (rt) {
-                            return (rt && rt.text !== undefined) ? rt.text : "";
-                        }).join("");
-                    }
-                } catch (e) {}
-            }
-            var label = rawHeader.trim().replace(/\r?\n/g, " ");
-            if (!label) return; // If header in row 3 is empty, no need to make a sheet
-            var value = entityRow[colIdx] !== undefined ? String(entityRow[colIdx]).trim() : "";
-            var firstLine = rawHeader.split(/\r?\n/)[0].trim();
-            var sheetTitle = getUniqueSheetName(wb, firstLine || label, marker);
+            var normalizedHeader = normalizeStatHeader(rawHeader);
+            if (!normalizedHeader) return; // If header in row 3 is empty, no need to make a sheet
+            var label = normalizedHeader;
+            var rawVal = entityRow[colIdx] !== undefined ? entityRow[colIdx] : "";
+            var value = extractCellValue(rawVal).trim();
+            var sheetTitle = getUniqueSheetName(wb, normalizedHeader, marker);
             addDataBlockSheet(wb, sheetTitle, label, value);
         });
 
-        // 2. Chart A -> Frequency Table ("Technology Breakdown (CPC)")
+        // 2. Chart A -> Frequency Table ("Technology Breakdown (CPC)") + Chart C -> Efficiency Rate
         if (chartCols["Chart A"] !== undefined) {
             var aIdx = chartCols["Chart A"];
             var aTitle = (headerRow[aIdx] || "Technology Breakdown (CPC)").trim();
             var aPairs = parseKeyValuePairs((entityRow[aIdx] || "").trim());
+            var cEffRatePairs = [];
+            if (chartCols["Chart C"] !== undefined) {
+                cEffRatePairs = parseKeyValuePairs((entityRow[chartCols["Chart C"]] || "").trim());
+            }
             if (aPairs.length > 0) {
-                addFrequencySheet(wb, "Technology Breakdown (CPC)", aTitle, aPairs, cpcDescMap);
+                addFrequencySheet(wb, "Technology Breakdown (CPC)", aTitle, aPairs, cpcDescMap, cEffRatePairs);
             }
         }
 
@@ -641,15 +765,22 @@
             return industryCols[a] - industryCols[b];
         });
         if (industryMarkersSorted.length > 0) {
+            var displayName = (entityRow[1] || "").trim() || entityName;
             var industries = industryMarkersSorted.map(function (marker) {
                 var startCol = industryCols[marker];
                 var industryName = (industryRow[startCol] || marker).trim();
+
+                // Extract total_positions from the cell immediately after the industry name in industryRow
+                var rawTotalPositions = (industryRow[startCol + 1] || "").toString().trim();
+                var totalPositions = parseInt(rawTotalPositions.replace(/,/g, ""), 10);
+
                 var rankVal = "", posVal = "", patVal = "", effVal = "";
 
                 for (var sub = 0; sub < 4; sub++) {
                     var c = startCol + sub;
                     var hdr = (headerRow[c] || "").trim().toLowerCase();
-                    var val = entityRow[c] !== undefined ? String(entityRow[c]).trim() : "";
+                    var rawVal = entityRow[c] !== undefined ? entityRow[c] : "";
+                    var val = extractCellValue(rawVal).trim();
                     if (hdr.indexOf("efficiency rate") !== -1 || hdr.indexOf("grant rate") !== -1 || hdr.indexOf("3yr grant rate") !== -1) {
                         effVal = val;
                     } else if (hdr.indexOf("position") !== -1) {
@@ -660,24 +791,35 @@
                         rankVal = val;
                     }
                 }
-                if (isNA(rankVal)) rankVal = "Unranked";
-                if (isNA(posVal)) posVal = "Unranked";
-                if (isNA(patVal)) patVal = "Unranked";
-                if (isNA(effVal)) effVal = "Unranked";
-                if (rankVal === "Unranked" || posVal === "Unranked") {
-                    if (patVal === "" || isNA(patVal)) patVal = "Unranked";
-                    if (effVal === "" || isNA(effVal)) effVal = "Unranked";
+                var industryHasNA = isNA(rankVal) || isNA(posVal) || isNA(patVal) || isNA(effVal) ||
+                    rankVal === "Unranked" || posVal === "Unranked" ||
+                    String(rankVal).indexOf("[object") !== -1 || String(patVal).indexOf("[object") !== -1;
+                if (industryHasNA) {
+                    rankVal = "Unranked";
+                    posVal = "Unranked";
+                    patVal = "Unranked";
+                    effVal = "Unranked";
+                }
+
+                // Build formatted rank string: "#55 of 128"
+                var formattedRank = null;
+                if (rankVal !== "Unranked" && rankVal !== "") {
+                    var rankNum = parseInt(String(rankVal).replace(/,/g, ""), 10);
+                    if (!isNaN(rankNum) && !isNaN(totalPositions)) {
+                        formattedRank = "#" + rankNum + " of " + totalPositions;
+                    }
                 }
 
                 return {
                     industry: industryName,
                     rank: rankVal,
+                    formattedRank: formattedRank,
                     position: posVal,
                     patents: patVal,
                     efficiencyRate: effVal
                 };
             });
-            addFirmRankingSheet(wb, "Firm Rankings", entityName, industries);
+            addFirmRankingSheet(wb, "Firm Rankings", entityName, displayName, industries);
         }
 
         return {
