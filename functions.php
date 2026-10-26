@@ -302,7 +302,10 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.1.8',
+        '1.2.0',
+		// 1.2.0 - Firm Rankings tab: Display Name is now preprocessed before writing to sheet:
+		//          title-cased and firm suffixes (e.g. LLC, PLLC, Inc) stripped via FIRM_SUFFIXES_TO_STRIP list.
+		// 1.1.9 - "cpc_descriptions_updated.csv"
 		// 1.1.8 - Decimal formatting: numbers with decimal places shown to 2 decimal places in all extracted sheets
 		// 1.1.7:
 		// - Firm Rankings tab: Entity Name cell (row 1, col 2) now uses Display Name (col 2 of source) instead of Entity Name
