@@ -1,6 +1,10 @@
 /**
  * Parola Bulk Dataset Extractor & Interactive Dashboard
- * Version 1.1.8
+ * Version 1.2.0
+ * - Firm Rankings tab: Display Name is now preprocessed before being written to the sheet:
+ *   title-cased and known firm suffixes (e.g. LLC, PLLC, Inc) are stripped.
+ *   The suffix list is maintained in FIRM_SUFFIXES_TO_STRIP (see Section 1a below).
+ * - "cpc_descriptions_updated"
  * - Decimal formatting: numbers with decimal places shown to 2 decimal places in all extracted sheets
  * - Firm Rankings tab: Entity Name cell (row 1, col 2) now uses Display Name (col 2 of source) instead of Entity Name
  * - Firm Rankings tab: Rank column now formatted as "#X of Y" using total_positions from industry row of source dataset
@@ -55,7 +59,7 @@
             defaultCsvUrl: wpConfig.defaultCsvUrl || "/wp-content/chart/Sample Bulk Dataset - Jenny version.csv",
             defaultXlsxUrl: wpConfig.defaultXlsxUrl || "/wp-content/chart/Sample Bulk Dataset - Jenny version.xlsx",
             nonce: wpConfig.nonce || "",
-            cpcUrl: SCRIPT_DIR + "cpc_descriptions.csv",
+            cpcUrl: SCRIPT_DIR + "cpc_descriptions_updated.csv",
             tcUrl: SCRIPT_DIR + "TC%20Definitions.csv"
         };
     }
@@ -237,6 +241,104 @@
             .replace(/[\/\\?%*:|"<>]/g, "-")
             .replace(/\s+/g, " ")
             .trim();
+    }
+
+    /* ------------------------------------------------------------------
+     * 1a. Display Name Preprocessing (Firm Rankings sheet)
+     * ------------------------------------------------------------------ */
+
+    /**
+     * FIRM_SUFFIXES_TO_STRIP
+     * ---------------------------------------------------------------
+     * List of firm-name suffixes to remove from the Display Name before
+     * it is written into the "Firm Rankings" sheet tab.
+     *
+     * HOW TO EDIT:
+     *   - To add a new suffix, append its string to this array.
+     *   - To remove a suffix, delete or comment out the relevant line.
+     *   - Each entry is matched case-insensitively and may be preceded
+     *     by an optional comma or period separator in the source string.
+     * ---------------------------------------------------------------
+     */
+    var FIRM_SUFFIXES_TO_STRIP = [
+        "Incorporated",
+        "Corporation",
+        "Company",
+        "PatentPC",
+        "RLLP",
+        "PLLC",
+        "LLP",
+        "LLC",
+        "PLC",
+        "Ltd",
+        "Inc",
+        "Corp",
+        "LPA",
+        "Co.",
+        "PC",
+        "PA",
+        "SC",
+        "PS",
+        "BV",
+        "LP",
+        "Oy",
+        "LLO",
+        "Limited"
+    ];
+
+    /**
+     * preprocessDisplayName(raw)
+     *
+     * Converts a raw firm display name into a clean, title-cased name by:
+     *   1. Trimming surrounding whitespace.
+     *   2. Stripping any suffix listed in FIRM_SUFFIXES_TO_STRIP (with an
+     *      optional preceding comma or period).
+     *   3. Converting the result to title case.
+     *
+     * Example: "HULTQUIST, PLLC" -> "Hultquist"
+     *
+     * @param  {string} raw  The raw display name from the source dataset.
+     * @return {string}      The cleaned, title-cased display name.
+     */
+    function preprocessDisplayName(raw) {
+        var name = String(raw || "").trim();
+        if (!name) return name;
+
+        // Sort suffixes longest-first so that more specific suffixes are
+        // matched before shorter ones that might be substrings (e.g. "LLC"
+        // before "LC").
+        var sortedSuffixes = FIRM_SUFFIXES_TO_STRIP.slice().sort(function (a, b) {
+            return b.length - a.length;
+        });
+
+        // Iteratively strip suffixes until no more are found.
+        var changed = true;
+        while (changed) {
+            changed = false;
+            for (var i = 0; i < sortedSuffixes.length; i++) {
+                // Build a pattern that matches an optional separator (comma,
+                // period, or whitespace) followed by the suffix at the very
+                // end of the string, case-insensitively.
+                var escapedSuffix = sortedSuffixes[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                var pattern = new RegExp(
+                    "[,\\.\\s]*" + escapedSuffix + "\\s*$",
+                    "i"
+                );
+                var trimmed = name.replace(pattern, "").trim();
+                if (trimmed !== name) {
+                    name = trimmed;
+                    changed = true;
+                    break; // Restart loop with the shortened name
+                }
+            }
+        }
+
+        // Convert to title case (first letter of each word capitalised).
+        name = name.replace(/\S+/g, function (word) {
+            return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        });
+
+        return name;
     }
 
     function sanitizeSheetName(name) {
@@ -765,7 +867,8 @@
             return industryCols[a] - industryCols[b];
         });
         if (industryMarkersSorted.length > 0) {
-            var displayName = (entityRow[1] || "").trim() || entityName;
+            // Preprocess display name: strip known firm suffixes and apply title case
+            var displayName = preprocessDisplayName((entityRow[1] || "").trim() || entityName);
             var industries = industryMarkersSorted.map(function (marker) {
                 var startCol = industryCols[marker];
                 var industryName = (industryRow[startCol] || marker).trim();
