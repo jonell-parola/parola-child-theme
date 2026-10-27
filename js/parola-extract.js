@@ -283,7 +283,10 @@
         "LP",
         "Oy",
         "LLO",
-        "Limited"
+        "Limited",
+        "P.C.",
+        "P.L.L.C.",
+        "L.L.P."
     ];
 
     /**
