@@ -302,7 +302,8 @@ function parola_enqueue_visualization_assets() {
         'parola-extract',
         get_stylesheet_directory_uri() . '/js/parola-extract.js',
         array('papaparse-cdn', 'exceljs-cdn'),
-        '1.2.0',
+        '1.2.1',
+		// 1.2.1 - - Added "P.C." and "P.L.L.C." and "L.L.P." to the FIRM_SUFFIXES_TO_STRIP array.
 		// 1.2.0 - Firm Rankings tab: Display Name is now preprocessed before writing to sheet:
 		//          title-cased and firm suffixes (e.g. LLC, PLLC, Inc) stripped via FIRM_SUFFIXES_TO_STRIP list.
 		// 1.1.9 - "cpc_descriptions_updated.csv"
