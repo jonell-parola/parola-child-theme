@@ -2,6 +2,7 @@
  * Parola Visualization Engine - Multi-instance Customization Dashboard
  *
  * Supports any number of .d3-test-canvas elements on the same page.
+ * 1.0.97 - Firm Ranking Table: display actual source file column headers in table and hover popup (no hardcoded overrides)
  * 1.0.96 - Consistent decimal formatting: percentages show 1 decimal place (XX.X%) across all chart types; data-block values show 2 decimal places for decimals, none for whole numbers
  * 1.0.95 - Firm Ranking Table Industry Position Color
  * 1.0.94 - Firm Ranking Table - Fixed position column to pull from raw data column (Industry Position)
@@ -1339,7 +1340,14 @@
         // Helper: parse multi-row bulk dataset or single CSV for firm ranking table
         function extractFirmRankingData(rawRows, fallbackData) {
             if (!rawRows || rawRows.length < 2) {
+                const fbKeys = fallbackData && fallbackData.length > 0 ? Object.keys(fallbackData[0]) : [];
                 return {
+                    columnLabels: {
+                        industry: fbKeys[0] || "Industry",
+                        position: fbKeys[1] || "Industry Position",
+                        patents: fbKeys[2] || "Number of Granted Patents",
+                        grantRate: fbKeys[3] || "Efficiency Rate"
+                    },
                     entities: [{
                         entityName: "Entity",
                         records: (fallbackData || []).map(function (row) {
@@ -1407,6 +1415,14 @@
             if (colPatents === -1) colPatents = 2;
             if (colGrantRate === -1) colGrantRate = 3;
 
+            // Capture the actual header labels from the source file
+            const columnLabels = {
+                industry: String(headerRow[colIndustry] || '').trim() || "Industry",
+                position: String(headerRow[colPosition] || '').trim() || "Industry Position",
+                patents: String(headerRow[colPatents] || '').trim() || "Number of Granted Patents",
+                grantRate: String(headerRow[colGrantRate] || '').trim() || "Efficiency Rate"
+            };
+
             const records = [];
             for (let r = headerRowIdx + 1; r < rawRows.length; r++) {
                 const dataRow = rawRows[r];
@@ -1428,6 +1444,7 @@
             }
 
             return {
+                columnLabels: columnLabels,
                 entities: [{
                     entityName: entityName || "Entity",
                     records: records
@@ -8817,6 +8834,12 @@
 
                 const rankingData = extractFirmRankingData(currentRawRows, data);
                 const entities = rankingData.entities || [];
+                const colLabels = rankingData.columnLabels || {
+                    industry: "Industry",
+                    position: "Industry Position",
+                    patents: "Number of Granted Patents",
+                    grantRate: "Efficiency Rate"
+                };
 
                 // -------------------------------------------------
                 // Row 1: First Row Entity Name
@@ -8859,10 +8882,10 @@
                     .style("background-color", "#f8fafc");
 
                 const columns = [
-                    { key: "industry", label: "Industry", align: "left" },
-                    { key: "position", label: "Industry Position", align: "left" },
-                    { key: "patents", label: "Number of Granted Patents", align: "right" },
-                    { key: "grantRate", label: "Efficiency Rate", align: "right" }
+                    { key: "industry", label: colLabels.industry, align: "left" },
+                    { key: "position", label: colLabels.position, align: "left" },
+                    { key: "patents", label: colLabels.patents, align: "right" },
+                    { key: "grantRate", label: colLabels.grantRate, align: "right" }
                 ];
 
                 const cellPaddingV = `${Math.max(8, Math.round(11 * fontScale))}px`;
@@ -9024,7 +9047,7 @@
                             .text(formattedGrantRate);
 
                         // Tooltip and hover
-                        const tooltipContent = `<strong>Industry:</strong> ${rec.industry}<br><strong>Industry Position:</strong> ${badgeInfo.label}<br><strong>Number of Granted Patents:</strong> ${formattedPatents}<br><strong>Efficiency Rate:</strong> ${formattedGrantRate}`;
+                        const tooltipContent = `<strong>${colLabels.industry}:</strong> ${rec.industry}<br><strong>${colLabels.position}:</strong> ${badgeInfo.label}<br><strong>${colLabels.patents}:</strong> ${formattedPatents}<br><strong>${colLabels.grantRate}:</strong> ${formattedGrantRate}`;
 
                         tr.on("mouseover", function () {
                             d3.select(this).style("background-color", "#f8fafc");
