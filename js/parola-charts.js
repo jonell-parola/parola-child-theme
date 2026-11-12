@@ -2,6 +2,7 @@
  * Parola Visualization Engine - Multi-instance Customization Dashboard
  *
  * Supports any number of .d3-test-canvas elements on the same page.
+ * 1.0.98 - Data Block: responsive text and spacing scaling for mobile devices
  * 1.0.97 - Firm Ranking Table: display actual source file column headers in table and hover popup (no hardcoded overrides)
  * 1.0.96 - Consistent decimal formatting: percentages show 1 decimal place (XX.X%) across all chart types; data-block values show 2 decimal places for decimals, none for whole numbers
  * 1.0.95 - Firm Ranking Table Industry Position Color
@@ -9142,29 +9143,33 @@
                         .attr("class", "parola-data-block")
                         .style("display", "flex")
                         .style("flex-direction", "column")
-                        .style("gap", "10px")
+                        .style("gap", `${Math.max(4, Math.round(10 * fontScale))}px`)
                         .style("min-width", "0")
-                        .style("padding", `${Math.max(12, Math.round(15 * fontScale))}px`)
+                        .style("padding", `${Math.max(6, Math.round(15 * fontScale))}px`)
                         .style("background-color", "#ffffff")
                         .style("box-sizing", "border-box");
 
                     block.append("div")
                         .attr("class", "parola-data-block__label")
                         .style("color", "#222222")
-                        .style("font-size", `${Math.max(11, Math.round(12 * fontScale))}px`)
+                        .style("font-size", `${Math.max(8, Math.round(12 * fontScale))}px`)
                         .style("font-weight", "400")
                         .style("line-height", "1.4")
                         .style("text-transform", "uppercase")
                         .style("font-family", activeFont)
+                        .style("word-break", "break-word")
+                        .style("overflow-wrap", "break-word")
                         .text(item.label);
 
                     block.append("div")
                         .attr("class", "parola-data-block__value")
                         .style("color", "#222222")
-                        .style("font-size", `${Math.max(22, Math.round(28 * fontScale))}px`)
+                        .style("font-size", `${Math.max(14, Math.round(28 * fontScale))}px`)
                         .style("font-weight", "500")
                         .style("line-height", "1.2")
                         .style("font-family", activeFont)
+                        .style("word-break", "break-word")
+                        .style("overflow-wrap", "break-word")
                         .text(formatDataBlockValue(item.value));
                 });
             } else {
