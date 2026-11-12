@@ -280,7 +280,8 @@ function parola_enqueue_visualization_assets() {
         'parola-charts', 
         get_stylesheet_directory_uri() . '/js/parola-charts.js', 
         array('papaparse-cdn', 'd3-cdn'), 
-        '1.0.97', 
+        '1.0.98', 
+		// 1.0.98 - Data Block: responsive text and spacing scaling for mobile devices
 		// 1.0.97 - Firm Ranking Table: display actual source file column headers in table and hover popup (no hardcoded overrides)
 		// 1.0.96 - Consistent decimal formatting: percentages show 1 decimal place (XX.X%) across all chart types; data-block values show 2 decimal places for decimals, none for whole numbers
 		// 1.0.95 - Firm Ranking Table - Industry Position Color Fix
